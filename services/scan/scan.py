@@ -103,12 +103,27 @@ def run() -> None:
 
         if is_new:
             row["first_discovered_at"] = now.isoformat()
+            row["discovery_latency_seconds"] = None
             if m.get("created_on_polymarket_at"):
                 try:
                     created = datetime.fromisoformat(m["created_on_polymarket_at"].replace("Z", "+00:00"))
                     row["discovery_latency_seconds"] = int((now - created).total_seconds())
                 except ValueError:
                     pass  # creation timestamp present but unparseable — leave latency null rather than guess
+        else:
+            # first_discovered_at is NOT NULL — every row in a batched
+            # upsert must carry it, even rows that aren't new. Carry the
+            # ORIGINAL value forward unchanged rather than refreshing it,
+            # since this is the core mission KPI and must never drift
+            # just because a market got re-scanned.
+            row["first_discovered_at"] = prev_row["first_discovered_at"]
+            # Same reasoning for discovery_latency_seconds: this column
+            # allows NULL, so a missing key here wouldn't crash the batch
+            # — but omitting it would silently overwrite an existing
+            # market's real latency value with NULL whenever it shares a
+            # batch with any new market that does set the key. Carry it
+            # forward explicitly instead.
+            row["discovery_latency_seconds"] = prev_row.get("discovery_latency_seconds")
 
         market_rows.append(row)
 
