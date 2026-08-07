@@ -17,6 +17,14 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
         raise HTTPException(status_code=401, detail="invalid secret token")
 
     update = await request.json()
+
+    if "callback_query" in update:
+        cq = update["callback_query"]
+        chat_id = cq.get("message", {}).get("chat", {}).get("id")
+        if chat_id:
+            commands.handle_callback(chat_id, cq["id"], cq.get("data", ""))
+        return {"ok": True}
+
     message = update.get("message", {})
     chat_id = message.get("chat", {}).get("id")
     text = (message.get("text") or "").strip()

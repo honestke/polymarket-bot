@@ -1,0 +1,105 @@
+"""
+Shared formatting for how a market gets shown in Telegram — used by
+scan.py (live alerts), digest.py (ranked digest), and bot/commands.py
+(command responses), so every surface looks the same.
+"""
+from shared import scoring
+
+# Legacy Telegram Markdown (not MarkdownV2) only treats these as special.
+# Market questions are arbitrary text from Polymarket and can contain any
+# of them — an unescaped one causes Telegram to reject the whole message
+# with a 400 error, silently dropping the alert. Escape defensively.
+_MARKDOWN_SPECIAL = ("_", "*", "`", "[")
+
+
+def escape_markdown(text: str) -> str:
+    text = text or ""
+    for ch in _MARKDOWN_SPECIAL:
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
+def market_url(slug: str | None) -> str:
+    """Best-effort deep link. Polymarket's public URL pattern is
+    polymarket.com/event/<slug> for most markets — verify this against a
+    real market before relying on it for anything critical; some
+    multi-outcome events may need a more specific path than a bare slug
+    provides."""
+    if not slug:
+        return "https://polymarket.com"
+    return f"https://polymarket.com/event/{slug}"
+
+
+def format_probability(price_yes: float | None) -> str:
+    return f"{price_yes:.0%}" if price_yes is not None else "—"
+
+
+def format_volume(volume: float | None) -> str:
+    if volume is None:
+        return "—"
+    if volume >= 1_000_000:
+        return f"${volume / 1_000_000:.1f}M"
+    if volume >= 1_000:
+        return f"${volume / 1_000:.0f}K"
+    return f"${volume:.0f}"
+
+
+def format_time_remaining(end_date_iso: str | None) -> str:
+    days = scoring.time_remaining_days(end_date_iso)
+    if days is None:
+        return "Unknown"
+    if days < 0:
+        return "Ended"
+    if days < 1:
+        return f"{max(days * 24, 0):.0f} Hours"
+    return f"{days:.0f} Days"
+
+
+def risk_label(risk_score: float | None) -> str:
+    if risk_score is None:
+        return "Unknown"
+    if risk_score < 0.33:
+        return "Low"
+    if risk_score < 0.66:
+        return "Medium"
+    return "High"
+
+
+def opportunity_display(score: float | None) -> str:
+    return f"{round(score * 100)}/100" if score is not None else "—"
+
+
+def format_market_card(market: dict, icon: str = "🏆", highlight: str | None = None) -> str:
+    """`market` is a row from the `markets` table (or an equivalent dict
+    with the same keys) — works for scan.py's in-memory rows and for rows
+    pulled back from Supabase alike."""
+    title = escape_markdown(market.get("question") or "Unknown market")
+    lines = [f"{icon} *{title}*", ""]
+    if highlight:
+        lines.append(f"_{escape_markdown(highlight)}_")
+        lines.append("")
+    lines.extend([
+        f"📊 Opportunity: {opportunity_display(market.get('opportunity_score'))}",
+        f"📈 Market: {format_probability(market.get('last_price_yes'))}",
+        f"⏳ Ends: {format_time_remaining(market.get('end_date'))}",
+        f"💰 Volume: {format_volume(market.get('last_volume_24h'))}",
+        f"⚠️ Risk: {risk_label(market.get('risk_score'))}",
+    ])
+    return "\n".join(lines)
+
+
+def market_keyboard(market_id: str, slug: str | None) -> dict:
+    """Inline keyboard for a market card. 'Open Market' is a plain URL
+    button — it works with zero backend involvement, no webhook needed.
+    'View Details' and 'Save' send a callback_query back to the bot,
+    which only gets answered if the Telegram webhook (Render service) is
+    deployed and running — see services/bot/app.py."""
+    return {
+        "inline_keyboard": [
+            [{"text": "🔗 Open Market", "url": market_url(slug)}],
+            [
+                {"text": "📈 View Details", "callback_data": f"details:{market_id}"},
+                {"text": "⭐ Save", "callback_data": f"save:{market_id}"},
+            ],
+        ]
+    }

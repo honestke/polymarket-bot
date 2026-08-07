@@ -67,3 +67,84 @@ def get_top_opportunities(limit: int = 10) -> list[dict]:
         .execute()
     )
     return result.data
+
+
+def get_market(market_id: str) -> dict | None:
+    result = get_client().table("markets").select("*").eq("market_id", market_id).execute()
+    return result.data[0] if result.data else None
+
+
+def get_recent_markets(limit: int = 10) -> list[dict]:
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .order("first_discovered_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def get_ending_soon(limit: int = 10) -> list[dict]:
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .in_("current_tier", ["hot", "critical"])
+        .order("end_date", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def get_categories() -> list[dict]:
+    """Returns [{'category': 'AI', 'count': 42}, ...]. Supabase's client
+    doesn't do GROUP BY directly, so this pulls the category column for
+    active markets and counts client-side — fine at this scale (a few
+    thousand rows), would need a proper SQL view if the platform grew by
+    another order of magnitude."""
+    result = get_client().table("markets").select("category").eq("status", "active").execute()
+    counts: dict[str, int] = {}
+    for row in result.data:
+        cat = row.get("category") or "Other"
+        counts[cat] = counts.get(cat, 0) + 1
+    return [{"category": k, "count": v} for k, v in sorted(counts.items(), key=lambda kv: -kv[1])]
+
+
+def get_markets_by_category(category: str, limit: int = 10) -> list[dict]:
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .eq("category", category)
+        .order("opportunity_score", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def save_market(chat_id: int, market_id: str) -> None:
+    get_client().table("saved_markets").upsert(
+        {"chat_id": chat_id, "market_id": market_id}, on_conflict="chat_id,market_id"
+    ).execute()
+
+
+def unsave_market(chat_id: int, market_id: str) -> None:
+    get_client().table("saved_markets").delete().eq("chat_id", chat_id).eq("market_id", market_id).execute()
+
+
+def get_saved_markets(chat_id: int) -> list[dict]:
+    result = (
+        get_client()
+        .table("saved_markets")
+        .select("market_id, markets(*)")
+        .eq("chat_id", chat_id)
+        .execute()
+    )
+    return [row["markets"] for row in result.data if row.get("markets")]

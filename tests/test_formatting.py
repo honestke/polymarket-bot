@@ -1,0 +1,53 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from shared import formatting
+
+
+def test_escape_markdown_neutralizes_special_chars():
+    assert formatting.escape_markdown("Will GPT-4_5 beat *everyone*?") == "Will GPT-4\\_5 beat \\*everyone\\*?"
+
+
+def test_market_url_uses_slug():
+    assert formatting.market_url("will-x-happen") == "https://polymarket.com/event/will-x-happen"
+
+
+def test_market_url_falls_back_without_slug():
+    assert formatting.market_url(None) == "https://polymarket.com"
+
+
+def test_format_volume_buckets():
+    assert formatting.format_volume(1_200_000) == "$1.2M"
+    assert formatting.format_volume(15_000) == "$15K"
+    assert formatting.format_volume(500) == "$500"
+    assert formatting.format_volume(None) == "—"
+
+
+def test_risk_label_buckets():
+    assert formatting.risk_label(0.1) == "Low"
+    assert formatting.risk_label(0.5) == "Medium"
+    assert formatting.risk_label(0.9) == "High"
+    assert formatting.risk_label(None) == "Unknown"
+
+
+def test_opportunity_display_scales_to_100():
+    assert formatting.opportunity_display(0.65) == "65/100"
+    assert formatting.opportunity_display(None) == "—"
+
+
+def test_format_market_card_includes_all_fields():
+    market = {
+        "question": "Will OpenAI release GPT-6 before Dec. 31?",
+        "opportunity_score": 0.94,
+        "last_price_yes": 0.68,
+        "end_date": None,
+        "last_volume_24h": 1_200_000,
+        "risk_score": 0.1,
+    }
+    card = formatting.format_market_card(market, icon="🏆")
+    assert "94/100" in card
+    assert "68%" in card
+    assert "$1.2M" in card
+    assert "Low" in card

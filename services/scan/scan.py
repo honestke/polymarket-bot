@@ -17,7 +17,7 @@ whether anything matches.
 """
 from datetime import datetime, timezone
 
-from shared import alert_engine, config, db, scoring, telegram_client
+from shared import alert_engine, config, db, formatting, scoring, telegram_client
 from shared.polymarket_client import fetch_all_active_markets
 
 
@@ -119,21 +119,15 @@ def run() -> None:
         if is_new:
             should_snapshot = True
             if opportunity >= config.NEW_MARKET_ALERT_THRESHOLD:
-                telegram_client.send_message(
-                    chat_id,
-                    f"🚨 *New market worth watching*\n\n{m['question']}\n\n"
-                    f"Category: {category}  |  Tier: {tier}  |  Opportunity score: {opportunity}",
-                )
+                text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
+                keyboard = formatting.market_keyboard(market_id, row.get("slug"))
+                telegram_client.send_message(chat_id, text, reply_markup=keyboard)
             # Markets below the threshold are still tracked and scored —
             # they surface later via /top or the hourly digest, not lost.
         else:
-            price_fired = alert_engine.maybe_alert_price_move(
-                market_id, m["question"], tier, prev_price, m["price_yes"], chat_id
-            )
-            volume_fired = alert_engine.maybe_alert_volume_spike(
-                market_id, m["question"], tier, prev_row.get("last_volume_24h"), m["volume_24h"], chat_id
-            )
-            alert_engine.maybe_alert_tier_change(market_id, m["question"], old_tier, tier, chat_id)
+            price_fired = alert_engine.maybe_alert_price_move(row, prev_price, chat_id)
+            volume_fired = alert_engine.maybe_alert_volume_spike(row, prev_row.get("last_volume_24h"), chat_id)
+            alert_engine.maybe_alert_tier_change(row, old_tier, chat_id)
             ai_trigger = price_fired or volume_fired
             if price_fired or volume_fired or volatility_points >= config.SNAPSHOT_NOISE_THRESHOLD_POINTS:
                 should_snapshot = True
