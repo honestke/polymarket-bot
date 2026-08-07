@@ -12,26 +12,46 @@ def get_client() -> Client:
     return _client
 
 
+def _chunks(items: list, size: int = 200):
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
+
+
 def upsert_markets(rows: list[dict]) -> None:
     if not rows:
         return
-    get_client().table("markets").upsert(rows, on_conflict="market_id").execute()
+    for chunk in _chunks(rows):
+        get_client().table("markets").upsert(chunk, on_conflict="market_id").execute()
 
 
 def get_markets_by_ids(market_ids: list[str]) -> dict[str, dict]:
     """Bulk-fetch existing rows for a batch of market_ids, keyed by id.
     Used to compute deltas (price/volume/tier change) against the previous
-    scan without a query per market."""
+    scan without a query per market.
+
+    Chunked because Supabase's `.in_()` filter is sent as a URL query
+    parameter — with the whole platform in scope (thousands of ids), a
+    single unchunked call overflows the URL length limit. Batches of 200
+    keep each request well within normal URL limits regardless of how
+    many markets are being tracked.
+    """
     if not market_ids:
         return {}
-    result = get_client().table("markets").select("*").in_("market_id", market_ids).execute()
-    return {row["market_id"]: row for row in result.data}
+    result: dict[str, dict] = {}
+    chunk_size = 200
+    for i in range(0, len(market_ids), chunk_size):
+        chunk = market_ids[i : i + chunk_size]
+        response = get_client().table("markets").select("*").in_("market_id", chunk).execute()
+        for row in response.data:
+            result[row["market_id"]] = row
+    return result
 
 
 def insert_price_snapshots(rows: list[dict]) -> None:
     if not rows:
         return
-    get_client().table("price_snapshots").insert(rows).execute()
+    for chunk in _chunks(rows):
+        get_client().table("price_snapshots").insert(chunk).execute()
 
 
 def get_cooldown(dedup_key: str) -> dict | None:

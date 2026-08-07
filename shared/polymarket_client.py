@@ -3,15 +3,7 @@ Thin client for Polymarket's public Gamma API (no auth required for reads).
 
 NOTE ON FIELD NAMES: the fields referenced below (question, conditionId,
 outcomePrices, volume24hr, liquidity, endDate, tags, clobTokenIds) come
-from Polymarket's current public API documentation. This module was
-written without live network access to gamma-api.polymarket.com from
-this environment, so it hasn't been tested against a real response.
-Before relying on it, run:
-
-    python -c "from shared.polymarket_client import fetch_all_active_markets; \
-               print(fetch_all_active_markets()[:2])"
-
-and adjust `normalize()` if any field names have changed. In particular,
+from Polymarket's current public API documentation. In particular,
 Polymarket doesn't reliably document a market *creation* timestamp on this
 endpoint — `created_on_polymarket_at` will likely come back None, in which
 case `discovery_latency_seconds` falls back to None in the scan job (see
@@ -22,17 +14,25 @@ import httpx
 from . import config
 
 PAGE_SIZE = 100
+MAX_PAGES = 500  # backstop against runaway pagination; 500 * 100 = 50,000 markets
 
 
 def fetch_all_active_markets() -> list[dict]:
     """Paginate through every active market via offset/limit. Returns a
-    list of normalized dicts. A handful of requests covers the whole
-    platform (thousands of markets / 100 per page), well within Gamma's
-    rate limits."""
+    list of normalized dicts.
+
+    Polymarket's API returns a 422 error past a certain offset depth
+    instead of an empty page (confirmed in production). That's not
+    documented behavior anywhere public, so rather than assume a fixed
+    cutoff, this treats any error response as "no more pages" and returns
+    whatever was successfully fetched instead of crashing the whole scan
+    over it. `MAX_PAGES` is a hard backstop in case the API ever starts
+    returning 200s forever.
+    """
     markets: list[dict] = []
     offset = 0
     with httpx.Client(timeout=30) as client:
-        while True:
+        for _ in range(MAX_PAGES):
             resp = client.get(
                 f"{config.GAMMA_API_BASE}/markets",
                 params={
@@ -43,7 +43,12 @@ def fetch_all_active_markets() -> list[dict]:
                     "ascending": False,
                 },
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                print(
+                    f"Gamma API returned {resp.status_code} at offset={offset}; "
+                    f"stopping pagination with {len(markets)} markets collected."
+                )
+                break
             page = resp.json()
             if not page:
                 break
@@ -66,7 +71,7 @@ def normalize(raw: dict) -> dict:
         "volume_24h": _safe_float(raw.get("volume24hr")),
         "liquidity": _safe_float(raw.get("liquidity")),
         "end_date": raw.get("endDate"),
-        "created_on_polymarket_at": raw.get("createdAt"),  # best-effort, may be absent
+        "created_on_polymarket_at": raw.get("createdAt"),
         "active": raw.get("active", True),
     }
 
