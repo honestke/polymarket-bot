@@ -23,6 +23,23 @@ from shared.polymarket_client import fetch_all_active_markets
 
 def run() -> None:
     raw_markets = [m for m in fetch_all_active_markets() if m["market_id"]]
+
+    # Polymarket's offset-based pagination can return the same market on
+    # more than one page — most likely when many low-volume markets tie
+    # on the volume24hr sort key, which makes offset-based ordering
+    # unstable across page boundaries. A duplicate market_id in the same
+    # upsert batch makes Postgres reject the whole batch (`ON CONFLICT DO
+    # UPDATE command cannot affect row a second time`), so dedup before
+    # anything else touches the list.
+    seen_ids: set[str] = set()
+    deduped_markets = []
+    for m in raw_markets:
+        if m["market_id"] in seen_ids:
+            continue
+        seen_ids.add(m["market_id"])
+        deduped_markets.append(m)
+    raw_markets = deduped_markets
+
     ids = [m["market_id"] for m in raw_markets]
     previous = db.get_markets_by_ids(ids)
     boosts = db.get_priority_boosts()
