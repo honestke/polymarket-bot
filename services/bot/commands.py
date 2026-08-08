@@ -53,17 +53,21 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
     action, _, value = data.partition(":")
 
     if action == "details":
-        market = db.get_market(value)
+        market = db.get_market_by_short_id(value)
         if not market:
             telegram_client.answer_callback_query(callback_query_id, "Market not found.")
             return
         telegram_client.answer_callback_query(callback_query_id)
         text = formatting.format_market_card(market, icon="📈")
-        keyboard = formatting.market_keyboard(market["market_id"], market.get("slug"))
+        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
     elif action == "save":
-        db.save_market(chat_id, value)
+        market = db.get_market_by_short_id(value)
+        if not market:
+            telegram_client.answer_callback_query(callback_query_id, "Market not found.")
+            return
+        db.save_market(chat_id, market["market_id"])
         telegram_client.answer_callback_query(callback_query_id, "Saved ⭐")
 
     elif action == "category":
@@ -80,7 +84,7 @@ def _send_market_list(chat_id: int, markets: list[dict], icon: str, empty_msg: s
         return
     for market in markets:
         text = formatting.format_market_card(market, icon=icon)
-        keyboard = formatting.market_keyboard(market["market_id"], market.get("slug"))
+        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
 

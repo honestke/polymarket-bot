@@ -84,6 +84,7 @@ def run() -> None:
 
         row = {
             "market_id": market_id,
+            "short_id": formatting.short_id(market_id),
             "question": m["question"],
             "slug": m["slug"],
             "category": category,
@@ -135,7 +136,7 @@ def run() -> None:
             should_snapshot = True
             if opportunity >= config.NEW_MARKET_ALERT_THRESHOLD:
                 text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
-                keyboard = formatting.market_keyboard(market_id, row.get("slug"))
+                keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"))
                 telegram_client.send_message(chat_id, text, reply_markup=keyboard)
             # Markets below the threshold are still tracked and scored —
             # they surface later via /top or the hourly digest, not lost.

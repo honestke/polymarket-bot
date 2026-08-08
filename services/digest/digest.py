@@ -20,7 +20,7 @@ def run(limit: int = DEFAULT_LIMIT) -> None:
     telegram_client.send_message(config.DEFAULT_CHAT_ID, f"📊 *Top {len(top)} opportunities right now*")
     for market in top:
         text = formatting.format_market_card(market, icon="🏆")
-        keyboard = formatting.market_keyboard(market["market_id"], market.get("slug"))
+        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"))
         telegram_client.send_message(config.DEFAULT_CHAT_ID, text, reply_markup=keyboard)
 
 

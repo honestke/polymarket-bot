@@ -51,3 +51,23 @@ def test_format_market_card_includes_all_fields():
     assert "68%" in card
     assert "$1.2M" in card
     assert "Low" in card
+
+
+def test_short_id_is_deterministic():
+    market_id = "0x" + "a" * 64  # Polymarket's real format: 0x + 64 hex chars
+    assert formatting.short_id(market_id) == formatting.short_id(market_id)
+
+
+def test_market_keyboard_callback_data_fits_telegram_limit():
+    """The actual bug: Telegram silently rejects any message whose
+    callback_data exceeds 64 bytes. Polymarket's market_id (66 chars) blew
+    past that on its own — every button on every card failed to send
+    until short_id existed. This test exists so that regression can never
+    be silent again."""
+    market_id = "0x" + "f" * 64
+    sid = formatting.short_id(market_id)
+    keyboard = formatting.market_keyboard(sid, "some-slug")
+    for row in keyboard["inline_keyboard"]:
+        for button in row:
+            if "callback_data" in button:
+                assert len(button["callback_data"].encode("utf-8")) <= 64

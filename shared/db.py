@@ -94,6 +94,14 @@ def get_market(market_id: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+def get_market_by_short_id(short_id: str) -> dict | None:
+    """Used to resolve button presses back to a real market — callback_data
+    carries short_id, never the raw market_id (see shared/formatting.py
+    for why)."""
+    result = get_client().table("markets").select("*").eq("short_id", short_id).execute()
+    return result.data[0] if result.data else None
+
+
 def get_recent_markets(limit: int = 10) -> list[dict]:
     result = (
         get_client()

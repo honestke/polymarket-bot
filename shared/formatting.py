@@ -4,6 +4,7 @@ scan.py (live alerts), digest.py (ranked digest), and bot/commands.py
 (command responses), so every surface looks the same.
 """
 from shared import scoring
+import hashlib
 
 # Legacy Telegram Markdown (not MarkdownV2) only treats these as special.
 # Market questions are arbitrary text from Polymarket and can contain any
@@ -28,6 +29,15 @@ def market_url(slug: str | None) -> str:
     if not slug:
         return "https://polymarket.com"
     return f"https://polymarket.com/event/{slug}"
+
+
+def short_id(market_id: str) -> str:
+    """Telegram's callback_data has a strict 64-byte limit. Polymarket's
+    market_id is a 66-character 0x-prefixed hex string, which alone
+    already exceeds that once combined with any prefix — every button
+    press was silently failing before this existed. A 10-char hash is
+    comfortably under the limit; collisions are a non-issue at this scale."""
+    return hashlib.sha256(market_id.encode()).hexdigest()[:10]
 
 
 def format_probability(price_yes: float | None) -> str:
@@ -88,18 +98,21 @@ def format_market_card(market: dict, icon: str = "🏆", highlight: str | None =
     return "\n".join(lines)
 
 
-def market_keyboard(market_id: str, slug: str | None) -> dict:
+def market_keyboard(market_row_short_id: str, slug: str | None) -> dict:
     """Inline keyboard for a market card. 'Open Market' is a plain URL
     button — it works with zero backend involvement, no webhook needed.
     'View Details' and 'Save' send a callback_query back to the bot,
     which only gets answered if the Telegram webhook (Render service) is
-    deployed and running — see services/bot/app.py."""
+    deployed and running — see services/bot/app.py.
+
+    Takes short_id (see short_id() above), NOT the raw market_id — the
+    real market_id overflows Telegram's 64-byte callback_data limit."""
     return {
         "inline_keyboard": [
             [{"text": "🔗 Open Market", "url": market_url(slug)}],
             [
-                {"text": "📈 View Details", "callback_data": f"details:{market_id}"},
-                {"text": "⭐ Save", "callback_data": f"save:{market_id}"},
+                {"text": "📈 View Details", "callback_data": f"details:{market_row_short_id}"},
+                {"text": "⭐ Save", "callback_data": f"save:{market_row_short_id}"},
             ],
         ]
     }

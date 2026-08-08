@@ -43,7 +43,7 @@ def maybe_alert_tier_change(market_row: dict, old_tier: str | None, chat_id) -> 
     if db.get_cooldown(dedup_key):
         return False
     text = formatting.format_market_card(market_row, icon="⏰", highlight=f"Now entering the {new_tier} tier")
-    keyboard = formatting.market_keyboard(market_id, market_row.get("slug"))
+    keyboard = formatting.market_keyboard(market_row["short_id"], market_row.get("slug"))
     telegram_client.send_message(chat_id, text, reply_markup=keyboard)
     db.upsert_cooldown({"dedup_key": dedup_key, "last_sent_at": datetime.now(timezone.utc).isoformat()})
     return True
@@ -68,7 +68,7 @@ def _fire_if_due(market_row: dict, alert_type: str, value: float, chat_id, icon:
             return False
 
     text = formatting.format_market_card(market_row, icon=icon, highlight=highlight)
-    keyboard = formatting.market_keyboard(market_id, market_row.get("slug"))
+    keyboard = formatting.market_keyboard(market_row["short_id"], market_row.get("slug"))
     telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
     minutes = config.ALERT_COOLDOWN_MINUTES.get(tier, 60)

@@ -13,7 +13,15 @@ def send_message(chat_id, text: str, parse_mode: str = "Markdown", reply_markup:
     payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
     if reply_markup:
         payload["reply_markup"] = reply_markup
-    httpx.post(f"{_api_base()}/sendMessage", json=payload, timeout=10)
+    resp = httpx.post(f"{_api_base()}/sendMessage", json=payload, timeout=10)
+    if resp.status_code >= 400:
+        # Telegram's API doesn't raise on the transport level for a
+        # rejected message (bad Markdown, oversized callback_data, etc.)
+        # — without this check, failures like that are completely
+        # invisible: the script "succeeds" while messages silently never
+        # arrive. Printed, not raised, so one bad card doesn't kill the
+        # rest of a batch (digest, scan alerts).
+        print(f"Telegram sendMessage failed ({resp.status_code}): {resp.text[:300]}")
 
 
 def answer_callback_query(callback_query_id: str, text: str | None = None) -> None:
