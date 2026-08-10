@@ -19,7 +19,7 @@ BOT_COMMANDS = [
     {"command": "categories", "description": "Browse by category"},
     {"command": "saved", "description": "Markets you've saved"},
     {"command": "search", "description": "Search current markets: /search <term>"},
-    {"command": "watchlist", "description": "Show your priority boosts"},
+    {"command": "watchlist", "description": "Alias for Settings, where boosts now live"},
     {"command": "add", "description": "Boost matching markets: /add <keyword>"},
     {"command": "remove", "description": "Remove a boost: /remove <keyword>"},
     {"command": "threshold", "description": "Set push cutoff: /threshold <0-100>"},

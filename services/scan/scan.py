@@ -147,7 +147,7 @@ def run() -> None:
                 })
                 if channel == "push":
                     text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
-                    keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"))
+                    keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"), row.get("category"))
                     telegram_client.send_message(chat_id, text, reply_markup=keyboard)
             # Markets below NEW_MARKET_ALERT_THRESHOLD aren't logged at all
             # — not interesting enough even for the feed. They're still

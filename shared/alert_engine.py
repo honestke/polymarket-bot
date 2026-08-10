@@ -103,5 +103,5 @@ def _log_alert(market_row: dict, alert_type: str, chat_id, value: float | None,
     })
     if channel == "push":
         text = formatting.format_market_card(market_row, icon=icon, highlight=highlight)
-        keyboard = formatting.market_keyboard(market_row["short_id"], market_row.get("slug"))
+        keyboard = formatting.market_keyboard(market_row["short_id"], market_row.get("slug"), market_row.get("category"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)

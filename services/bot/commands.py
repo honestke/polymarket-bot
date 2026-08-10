@@ -13,7 +13,7 @@ HELP_TEXT = (
     "/live - recent activity that didn't warrant a push notification\n"
     "/categories - browse by category\n"
     "/saved - markets you've saved\n"
-    "/watchlist - show your priority boosts\n"
+    "/watchlist - alias for Settings, where your boosts now live\n"
     "/add <keyword or category> - boost matching markets in rankings/alerts\n"
     "/remove <keyword or category> - remove a boost\n"
     "/threshold <0-100> - set your personal push-notification cutoff\n"
@@ -79,7 +79,7 @@ def handle(chat_id: int, text: str) -> None:
     elif command == "/saved":
         _saved(chat_id)
     elif command == "/watchlist":
-        _watchlist(chat_id)
+        _settings(chat_id)  # boosts live in Settings now, not a separate view
     elif command == "/add":
         _add(chat_id, arg)
     elif command == "/remove":
@@ -107,7 +107,7 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
             return
         telegram_client.answer_callback_query(callback_query_id)
         text = formatting.format_market_card(market, icon="📈")
-        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"))
+        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"), market.get("category"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
     elif action == "save":
@@ -181,6 +181,14 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
         telegram_client.answer_callback_query(callback_query_id, f"Removed: {value}")
         _settings(chat_id)
 
+    elif action == "cardboost":
+        # Boost directly from a market card — same underlying boost as
+        # Settings' category buttons, but just a toast here instead of
+        # reopening the whole Settings view, since that'd be jarring in
+        # the middle of browsing a market.
+        _add_boost(chat_id, value)
+        telegram_client.answer_callback_query(callback_query_id, f"Boosted: {value}")
+
     else:
         telegram_client.answer_callback_query(callback_query_id)
 
@@ -191,7 +199,7 @@ def _send_market_list(chat_id: int, markets: list[dict], icon: str, empty_msg: s
         return
     for market in markets:
         text = formatting.format_market_card(market, icon=icon)
-        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"))
+        keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"), market.get("category"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
 
@@ -316,19 +324,24 @@ def _settings(chat_id: int) -> None:
     boost_lines = "\n".join(f"- {b['keyword_or_category']}" for b in boosts) or "None set."
     result = db.get_client().table("markets").select("market_id", count="exact").execute()
     threshold = db.get_push_threshold(chat_id)
+    threshold_display = "No Threshold — every alert pushes instantly" if threshold <= 0 else f"{int(threshold * 100)}/100"
     text = (
         "⚙️ *Settings*\n\n"
         f"Tracking {result.count} active markets platform-wide.\n\n"
         f"*Your priority boosts:*\n{boost_lines}\n"
         "Tap ✕ below to remove one, or tap a category to add it — no typing needed. "
         "(A custom keyword still needs /add <word> since it can't be listed as a button.)\n\n"
-        f"*Push threshold:* {int(threshold * 100)}/100\n"
-        "Only markets scoring at or above this push an instant notification — "
-        "everything else is still logged in 📡 Live Updates.\n"
+        f"*Push threshold:* {threshold_display}\n"
+        "Every market gets an Opportunity Score from 0-100 based on how noteworthy it is right now "
+        "(price movement, volume, how new it is). Your threshold is the score a market needs to "
+        "reach before it interrupts you with an instant Telegram alert — anything below that is "
+        "still tracked and still logged in 📡 Live Updates, it just won't buzz your phone. "
+        "Lower threshold = more alerts, higher = fewer but bigger ones.\n"
         "Tap a preset below."
     )
 
     keyboard_rows = [
+        [{"text": "0 — No Threshold (push everything)", "callback_data": "threshold:0"}],
         [
             {"text": "20", "callback_data": "threshold:20"},
             {"text": "30", "callback_data": "threshold:30"},
@@ -385,15 +398,6 @@ def _set_threshold(chat_id: int, arg: str) -> None:
         f"Push threshold set to {value:.0f}/100. Markets scoring at or above this will push instantly; "
         "everything else still logs to 📡 Live Updates.",
     )
-
-
-def _watchlist(chat_id: int) -> None:
-    boosts = [b for b in db.get_priority_boosts() if b["chat_id"] == chat_id]
-    if not boosts:
-        telegram_client.send_message(chat_id, "No boosts set. Use /add <keyword or category>.")
-        return
-    lines = [f"- {b['keyword_or_category']} (weight {b['weight']})" for b in boosts]
-    telegram_client.send_message(chat_id, "\n".join(lines))
 
 
 def _add(chat_id: int, term: str) -> None:

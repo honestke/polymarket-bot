@@ -80,7 +80,7 @@ def test_market_keyboard_callback_data_fits_telegram_limit():
     be silent again."""
     market_id = "0x" + "f" * 64
     sid = formatting.short_id(market_id)
-    keyboard = formatting.market_keyboard(sid, "some-slug")
+    keyboard = formatting.market_keyboard(sid, "some-slug", category="Entertainment")
     for row in keyboard["inline_keyboard"]:
         for button in row:
             if "callback_data" in button:
@@ -96,3 +96,15 @@ def test_format_feed_line_includes_score_and_icon():
     assert "🔥" in line
     assert "32/100" in line
     assert "Will X happen?" in line
+
+
+def test_market_keyboard_adds_boost_button_when_category_given():
+    keyboard = formatting.market_keyboard("abc123", "some-slug", category="Politics")
+    all_texts = [b["text"] for row in keyboard["inline_keyboard"] for b in row]
+    assert any("Boost Politics" in t for t in all_texts)
+
+
+def test_market_keyboard_omits_boost_button_without_category():
+    keyboard = formatting.market_keyboard("abc123", "some-slug", category=None)
+    all_texts = [b["text"] for row in keyboard["inline_keyboard"] for b in row]
+    assert not any("Boost" in t for t in all_texts)

@@ -103,7 +103,7 @@ def format_market_card(market: dict, icon: str = "🏆", highlight: str | None =
     return "\n".join(lines)
 
 
-def market_keyboard(market_row_short_id: str, slug: str | None) -> dict:
+def market_keyboard(market_row_short_id: str, slug: str | None, category: str | None = None) -> dict:
     """Inline keyboard for a market card. 'Open Market' is a plain URL
     button — it works with zero backend involvement, no webhook needed.
     'View Details' and 'Save' send a callback_query back to the bot,
@@ -111,16 +111,21 @@ def market_keyboard(market_row_short_id: str, slug: str | None) -> dict:
     deployed and running — see services/bot/app.py.
 
     Takes short_id (see short_id() above), NOT the raw market_id — the
-    real market_id overflows Telegram's 64-byte callback_data limit."""
-    return {
-        "inline_keyboard": [
-            [{"text": "🔗 Open Market", "url": market_url(slug)}],
-            [
-                {"text": "📈 View Details", "callback_data": f"details:{market_row_short_id}"},
-                {"text": "⭐ Save", "callback_data": f"save:{market_row_short_id}"},
-            ],
-        ]
-    }
+    real market_id overflows Telegram's 64-byte callback_data limit.
+
+    `category`, when given, adds a one-tap "Boost this category" row —
+    lets someone add a watchlist boost directly from a card they're
+    looking at, instead of only via Settings."""
+    rows = [
+        [{"text": "🔗 Open Market", "url": market_url(slug)}],
+        [
+            {"text": "📈 View Details", "callback_data": f"details:{market_row_short_id}"},
+            {"text": "⭐ Save", "callback_data": f"save:{market_row_short_id}"},
+        ],
+    ]
+    if category:
+        rows.append([{"text": f"📌 Boost {category}", "callback_data": f"cardboost:{category}"}])
+    return {"inline_keyboard": rows}
 
 
 # Persistent reply keyboard shown after /start — stays visible under the
