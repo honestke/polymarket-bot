@@ -117,3 +117,33 @@ def market_keyboard(market_row_short_id: str, slug: str | None) -> dict:
             ],
         ]
     }
+
+
+# Persistent reply keyboard shown after /start — stays visible under the
+# text box until replaced. Button presses arrive as ordinary text
+# messages with this exact label, routed in services/bot/commands.py.
+MAIN_MENU_KEYBOARD = {
+    "keyboard": [
+        ["🏆 Best Opportunities", "🆕 New Markets"],
+        ["⏳ Ending Soon", "📡 Live Updates"],
+        ["📂 Categories", "⚙️ Settings"],
+    ],
+    "resize_keyboard": True,
+}
+
+_FEED_ICONS = {
+    "price_move": "📈",
+    "volume_spike": "🔥",
+    "tier_change": "⏰",
+    "new_market": "🆕",
+}
+
+
+def format_feed_line(alert_row: dict) -> str:
+    """One compact line per event for /live — a scrollable feed, not a
+    stack of full cards, since a feed is meant to be skimmed."""
+    market = alert_row.get("markets") or {}
+    icon = _FEED_ICONS.get(alert_row.get("alert_type"), "•")
+    question = escape_markdown(market.get("question") or "Unknown market")
+    score = opportunity_display(market.get("opportunity_score"))
+    return f"{icon} {question} — score {score}"

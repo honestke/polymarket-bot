@@ -35,10 +35,46 @@ SNAPSHOT_NOISE_THRESHOLD_POINTS = 1.5    # persist a price_snapshot for non-hot/
 # reasonable v1.1 upgrade once you have real data to compute one from.
 NEW_MARKET_ALERT_THRESHOLD = 0.7
 
+# Lower bar: any notable event (new market, price move, volume spike) at
+# or above this score gets LOGGED to the /live feed, but not pushed.
+# This is intentionally the same value as NEW_MARKET_ALERT_THRESHOLD for
+# new markets specifically — a market not worth logging at all isn't
+# worth surfacing anywhere. Kept as a separate name so the two concerns
+# (worth logging vs. worth interrupting someone for) can be tuned
+# independently later.
+FEED_LOG_THRESHOLD = 0.0  # log every fired alert to the feed regardless of score; only push is gated
+
+# Higher bar: only markets at or above THIS score get an instant push.
+# Everything else that fires (passes cooldown/hysteresis) still gets
+# logged to the feed — see FEED_LOG_THRESHOLD — just not pushed. This is
+# what stops a 12/100 market's routine volume blip from buzzing your
+# phone while still keeping it browsable via /live.
+PUSH_OPPORTUNITY_THRESHOLD = 0.85
+
 ALERT_COOLDOWN_MINUTES = {
     "critical": 15,
     "hot": 30,
     "active": 45,
     "warm": 60,
     "background": 120,
+}
+
+# (min_days_remaining, max_days_remaining) — used by the "Ending Soon"
+# time-bucket picker. None means unbounded on that side.
+ENDING_SOON_BUCKETS = {
+    "24h": (0, 1),
+    "7d": (1, 7),
+    "2w": (7, 14),
+    "1m": (14, 30),
+    "longer": (30, None),
+}
+
+# (min_days_since_discovered, max_days_since_discovered) — used by the
+# "Best Opportunities" Today/Week/Month picker. Interpreted as "when was
+# this market discovered or last notably active", not resolution time —
+# see the note where this is used for the reasoning.
+BEST_OPPORTUNITIES_WINDOWS = {
+    "today": 1,
+    "week": 7,
+    "month": 30,
 }

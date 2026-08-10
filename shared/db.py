@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from supabase import Client, create_client
 
 from . import config
@@ -123,6 +125,64 @@ def get_ending_soon(limit: int = 10) -> list[dict]:
         .eq("status", "active")
         .in_("current_tier", ["hot", "critical"])
         .order("end_date", desc=False)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def get_ending_in_range(min_days: float, max_days: float | None, limit: int = 10) -> list[dict]:
+    """Powers the Ending Soon time-bucket picker. min/max are days from
+    now; max_days=None means unbounded (the 'longer than 1 month' bucket).
+    Computed client-side against end_date rather than a stored day-count
+    column, since 'days remaining' changes every second and storing it
+    would go stale between scans."""
+    now = datetime.now(timezone.utc)
+    min_dt = (now + timedelta(days=min_days)).isoformat()
+    query = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .gte("end_date", min_dt)
+        .order("opportunity_score", desc=True)
+        .limit(limit)
+    )
+    if max_days is not None:
+        max_dt = (now + timedelta(days=max_days)).isoformat()
+        query = query.lte("end_date", max_dt)
+    return query.execute().data
+
+
+def get_top_opportunities_since(since_days: float, limit: int = 10) -> list[dict]:
+    """Powers the Best Opportunities Today/Week/Month picker — filters by
+    how recently a market was discovered, then ranks by score. A market
+    discovered a month ago that's still strong won't show in 'Today', but
+    will in 'Month'."""
+    since_dt = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .gte("first_discovered_at", since_dt)
+        .order("opportunity_score", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
+def get_live_feed(limit: int = 15) -> list[dict]:
+    """Feed-channel alerts (logged but not pushed — see
+    shared/alert_engine.py) joined with the market's current info, most
+    recent first. Powers the /live command."""
+    result = (
+        get_client()
+        .table("alerts")
+        .select("alert_type, triggered_value, sent_at, markets(question, category, opportunity_score, short_id, slug, current_tier)")
+        .eq("channel", "feed")
+        .order("sent_at", desc=True)
         .limit(limit)
         .execute()
     )

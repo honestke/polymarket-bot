@@ -135,11 +135,21 @@ def run() -> None:
         if is_new:
             should_snapshot = True
             if opportunity >= config.NEW_MARKET_ALERT_THRESHOLD:
-                text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
-                keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"))
-                telegram_client.send_message(chat_id, text, reply_markup=keyboard)
-            # Markets below the threshold are still tracked and scored —
-            # they surface later via /top or the hourly digest, not lost.
+                channel = "push" if opportunity >= config.PUSH_OPPORTUNITY_THRESHOLD else "feed"
+                db.insert_alert({
+                    "market_id": market_id,
+                    "chat_id": chat_id,
+                    "alert_type": "new_market",
+                    "triggered_value": opportunity,
+                    "channel": channel,
+                })
+                if channel == "push":
+                    text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
+                    keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"))
+                    telegram_client.send_message(chat_id, text, reply_markup=keyboard)
+            # Markets below NEW_MARKET_ALERT_THRESHOLD aren't logged at all
+            # — not interesting enough even for the feed. They're still
+            # tracked and scored, just surfaced only via /top or /new.
         else:
             price_fired = alert_engine.maybe_alert_price_move(row, prev_price, chat_id)
             volume_fired = alert_engine.maybe_alert_volume_spike(row, prev_row.get("last_volume_24h"), chat_id)

@@ -71,3 +71,14 @@ def test_market_keyboard_callback_data_fits_telegram_limit():
         for button in row:
             if "callback_data" in button:
                 assert len(button["callback_data"].encode("utf-8")) <= 64
+
+
+def test_format_feed_line_includes_score_and_icon():
+    row = {
+        "alert_type": "volume_spike",
+        "markets": {"question": "Will X happen?", "opportunity_score": 0.32},
+    }
+    line = formatting.format_feed_line(row)
+    assert "🔥" in line
+    assert "32/100" in line
+    assert "Will X happen?" in line
