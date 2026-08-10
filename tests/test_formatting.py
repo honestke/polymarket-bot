@@ -53,6 +53,20 @@ def test_format_market_card_includes_all_fields():
     assert "Low" in card
 
 
+def test_format_market_card_shows_group_size_when_multi_outcome():
+    market = {"question": "Will Harry Kane win?", "group_size": 23}
+    card = formatting.format_market_card(market)
+    assert "One of 23 candidates" in card
+
+
+def test_format_market_card_omits_group_label_for_standalone_markets():
+    market = {"question": "Will it rain?", "group_size": None}
+    card = formatting.format_market_card(market)
+    assert "candidates" not in card
+    market_single = {"question": "Will it rain?", "group_size": 1}
+    assert "candidates" not in formatting.format_market_card(market_single)
+
+
 def test_short_id_is_deterministic():
     market_id = "0x" + "a" * 64  # Polymarket's real format: 0x + 64 hex chars
     assert formatting.short_id(market_id) == formatting.short_id(market_id)

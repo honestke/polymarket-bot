@@ -89,6 +89,10 @@ def format_market_card(market: dict, icon: str = "🏆", highlight: str | None =
     if highlight:
         lines.append(f"_{escape_markdown(highlight)}_")
         lines.append("")
+    group_size = market.get("group_size")
+    if group_size and group_size > 1:
+        lines.append(f"🔀 One of {group_size} candidates in this event")
+        lines.append("")
     lines.extend([
         f"📊 Opportunity: {opportunity_display(market.get('opportunity_score'))}",
         f"📈 Market: {format_probability(market.get('last_price_yes'))}",

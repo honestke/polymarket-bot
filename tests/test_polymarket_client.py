@@ -59,3 +59,25 @@ def test_fetch_all_active_markets_dedupes_across_both_passes(monkeypatch):
     ids = {m["market_id"] for m in result}
     assert ids == {"0xAAA", "0xBBB", "0xCCC"}
     assert len(result) == 3  # not 4 — 0xAAA deduplicated
+
+
+def test_normalize_extracts_group_size_from_nested_event_markets():
+    raw = {
+        "conditionId": "0xHarryKane",
+        "question": "Will Harry Kane win the 2026 Ballon d'Or?",
+        "outcomePrices": '["0.58", "0.42"]',
+        "events": [{"slug": "ballon-dor-winner-2026", "markets": [{}] * 23}],
+    }
+    result = normalize(raw)
+    assert result["group_size"] == 23
+
+
+def test_normalize_group_size_none_when_not_determinable():
+    raw = {
+        "conditionId": "0xStandalone",
+        "question": "Will it rain tomorrow?",
+        "outcomePrices": '["0.30", "0.70"]',
+        "events": [{"slug": "will-it-rain"}],  # no nested "markets" list
+    }
+    result = normalize(raw)
+    assert result["group_size"] is None

@@ -100,6 +100,7 @@ def run() -> None:
             "confidence_score": confidence,
             "source_reliability_score": reliability,
             "opportunity_score": opportunity,
+            "group_size": m.get("group_size"),
             "updated_at": now.isoformat(),
         }
 

@@ -104,6 +104,20 @@ def normalize(raw: dict) -> dict:
     event_slug = events[0].get("slug") if events and isinstance(events[0], dict) else None
     slug = event_slug or raw.get("slug")
 
+    # How many sibling markets share this event (e.g. "Ballon d'Or Winner
+    # 2026" has one binary market per candidate, all under one event) —
+    # used to show "one of N candidates" context on the card instead of
+    # a lone binary market that looks disconnected from its siblings.
+    # NOT VERIFIED LIVE: whether the market-level /markets endpoint's
+    # nested "events" entry includes the full sibling "markets" array
+    # (confirmed present when fetching an event directly via /events) or
+    # just a lightweight reference. Defensive fallback to None either way.
+    group_size = None
+    if events and isinstance(events[0], dict):
+        sibling_markets = events[0].get("markets")
+        if isinstance(sibling_markets, list):
+            group_size = len(sibling_markets)
+
     return {
         "market_id": raw.get("conditionId"),
         "question": raw.get("question"),
@@ -115,6 +129,7 @@ def normalize(raw: dict) -> dict:
         "end_date": raw.get("endDate"),
         "created_on_polymarket_at": raw.get("createdAt"),
         "active": raw.get("active", True),
+        "group_size": group_size,
     }
 
 
