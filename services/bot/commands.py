@@ -106,7 +106,9 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
             telegram_client.answer_callback_query(callback_query_id, "Market not found.")
             return
         telegram_client.answer_callback_query(callback_query_id)
-        text = formatting.format_market_card(market, icon="📈")
+        ai_summary = db.get_latest_ai_summary(market["market_id"])
+        snapshots = db.get_recent_snapshots(market["market_id"], limit=5)
+        text = formatting.format_market_details(market, ai_summary, snapshots)
         keyboard = formatting.market_keyboard(market["short_id"], market.get("slug"), market.get("category"))
         telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 

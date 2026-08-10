@@ -15,6 +15,7 @@ Watchlist ("priority_boosts") entries change ranking and alert
 sensitivity only — every market gets scored and tracked regardless of
 whether anything matches.
 """
+from collections import Counter
 from datetime import datetime, timezone
 
 from shared import alert_engine, config, db, formatting, scoring, telegram_client
@@ -181,7 +182,28 @@ def run() -> None:
     if resolved_count:
         print(f"Marked {resolved_count} markets resolved (end_date has passed).")
     db.insert_price_snapshots(snapshot_rows)
+    recompute_group_sizes()
     print(f"Scan complete: {len(market_rows)} markets processed, {len(snapshot_rows)} snapshots written.")
+
+
+def recompute_group_sizes() -> None:
+    """Computes group_size (the 'one of N candidates' label) from OUR OWN
+    data — how many currently-active markets share the same event slug —
+    rather than Gamma's nested event.markets array, which the /markets
+    endpoint doesn't reliably include (confirmed only for the /events
+    endpoint). The event slug itself is known-good, since it's the same
+    field the 'Open Market' link is built from and that's been confirmed
+    working."""
+    rows = db.get_active_market_slugs()
+    slug_counts = Counter(r["slug"] for r in rows if r.get("slug"))
+    by_size: dict[int, list[str]] = {}
+    for r in rows:
+        slug = r.get("slug")
+        if not slug:
+            continue
+        by_size.setdefault(slug_counts[slug], []).append(r["market_id"])
+    for size, market_ids in by_size.items():
+        db.update_group_sizes(size, market_ids)
 
 
 if __name__ == "__main__":

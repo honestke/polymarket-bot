@@ -108,3 +108,24 @@ def test_market_keyboard_omits_boost_button_without_category():
     keyboard = formatting.market_keyboard("abc123", "some-slug", category=None)
     all_texts = [b["text"] for row in keyboard["inline_keyboard"] for b in row]
     assert not any("Boost" in t for t in all_texts)
+
+
+def test_format_market_details_adds_confidence_and_reliability():
+    market = {"question": "Will X happen?", "confidence_score": 0.7, "source_reliability_score": 0.5}
+    details = formatting.format_market_details(market, ai_summary=None, snapshots=[])
+    assert "Confidence: 70/100" in details
+    assert "Source reliability: 50/100" in details
+
+
+def test_format_market_details_includes_ai_summary_when_present():
+    market = {"question": "Will X happen?"}
+    summary = {"summary_text": "Price moved from 40% to 55% on high volume."}
+    details = formatting.format_market_details(market, ai_summary=summary, snapshots=[])
+    assert "Price moved from 40% to 55%" in details
+
+
+def test_format_market_details_omits_sections_with_no_data():
+    market = {"question": "Will X happen?"}
+    details = formatting.format_market_details(market, ai_summary=None, snapshots=[])
+    assert "🤖" not in details
+    assert "Recent price history" not in details

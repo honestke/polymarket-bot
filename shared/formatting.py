@@ -103,6 +103,33 @@ def format_market_card(market: dict, icon: str = "🏆", highlight: str | None =
     return "\n".join(lines)
 
 
+def format_market_details(market: dict, ai_summary: dict | None, snapshots: list[dict]) -> str:
+    """The actual 'more than the basic card' content for View Details:
+    confidence/reliability scores that aren't on the base card, any AI
+    summary that's been generated for this market, and recent price
+    history if any snapshots exist. Markets that have never triggered a
+    price/volume alert will have neither an AI summary nor snapshots —
+    in that case this still adds the two score lines, just nothing more,
+    since there genuinely isn't more data to show."""
+    lines = [format_market_card(market, icon="📈"), ""]
+    lines.append(f"🎯 Confidence: {opportunity_display(market.get('confidence_score'))}")
+    lines.append(f"📚 Source reliability: {opportunity_display(market.get('source_reliability_score'))}")
+
+    if ai_summary and ai_summary.get("summary_text"):
+        lines.append("")
+        lines.append(f"🤖 _{escape_markdown(ai_summary['summary_text'])}_")
+
+    if snapshots:
+        lines.append("")
+        lines.append("📉 *Recent price history:*")
+        for snap in snapshots:
+            price = format_probability(snap.get("price_yes"))
+            when = (snap.get("captured_at") or "")[:16].replace("T", " ")
+            lines.append(f"  {when} — {price}")
+
+    return "\n".join(lines)
+
+
 def market_keyboard(market_row_short_id: str, slug: str | None, category: str | None = None) -> dict:
     """Inline keyboard for a market card. 'Open Market' is a plain URL
     button — it works with zero backend involvement, no webhook needed.

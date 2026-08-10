@@ -166,6 +166,48 @@ def get_market(market_id: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+def get_active_market_slugs() -> list[dict]:
+    """Just market_id + slug for every active market — used to compute
+    group_size ourselves (see recompute_group_sizes in scan.py) rather
+    than depending on Gamma's nested event.markets array, which the
+    /markets endpoint doesn't reliably include."""
+    result = get_client().table("markets").select("market_id, slug").eq("status", "active").execute()
+    return result.data
+
+
+def update_group_sizes(size: int, market_ids: list[str]) -> None:
+    if not market_ids:
+        return
+    for chunk in _chunks(market_ids):
+        get_client().table("markets").update({"group_size": size}).in_("market_id", chunk).execute()
+
+
+def get_latest_ai_summary(market_id: str) -> dict | None:
+    result = (
+        get_client()
+        .table("ai_analysis")
+        .select("*")
+        .eq("market_id", market_id)
+        .order("generated_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def get_recent_snapshots(market_id: str, limit: int = 5) -> list[dict]:
+    result = (
+        get_client()
+        .table("price_snapshots")
+        .select("price_yes, volume_24h, captured_at")
+        .eq("market_id", market_id)
+        .order("captured_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
 def get_market_by_short_id(short_id: str) -> dict | None:
     """Used to resolve button presses back to a real market — callback_data
     carries short_id, never the raw market_id (see shared/formatting.py
