@@ -21,11 +21,12 @@ def escape_markdown(text: str) -> str:
 
 
 def market_url(slug: str | None) -> str:
-    """Best-effort deep link. Polymarket's public URL pattern is
-    polymarket.com/event/<slug> for most markets — verify this against a
-    real market before relying on it for anything critical; some
-    multi-outcome events may need a more specific path than a bare slug
-    provides."""
+    """Deep link using the market's associated EVENT slug (see
+    shared/polymarket_client.py normalize() — an earlier version used the
+    market's own slug instead of the event's, which is a different value
+    and was landing on blank/wrong pages). Still worth spot-checking a
+    few real links, since this hasn't been verified against a live
+    response from this environment."""
     if not slug:
         return "https://polymarket.com"
     return f"https://polymarket.com/event/{slug}"

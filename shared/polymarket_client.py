@@ -62,10 +62,22 @@ def fetch_all_active_markets() -> list[dict]:
 def normalize(raw: dict) -> dict:
     outcome_prices = raw.get("outcomePrices") or []
     price_yes = _safe_float(outcome_prices[0]) if outcome_prices else None
+
+    # Polymarket's public URL (polymarket.com/event/{slug}) needs the
+    # EVENT's slug, not the market's own slug — these are two different
+    # values, and using the market slug was landing on blank/wrong pages
+    # in practice. The /markets response nests an "events" array on each
+    # market object; prefer the first event's slug, and only fall back to
+    # the market's own slug if no event is attached (some single-market
+    # listings may not nest one).
+    events = raw.get("events") or []
+    event_slug = events[0].get("slug") if events and isinstance(events[0], dict) else None
+    slug = event_slug or raw.get("slug")
+
     return {
         "market_id": raw.get("conditionId"),
         "question": raw.get("question"),
-        "slug": raw.get("slug"),
+        "slug": slug,
         "tags": raw.get("tags") or [],
         "price_yes": price_yes,
         "volume_24h": _safe_float(raw.get("volume24hr")),
