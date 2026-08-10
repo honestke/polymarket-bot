@@ -27,19 +27,40 @@ MAX_PAGES = 500  # backstop against runaway pagination; 500 * 100 = 50,000 marke
 
 
 def fetch_all_active_markets() -> list[dict]:
-    """Paginate through every active market via offset/limit. Returns a
-    list of normalized dicts.
+    """Two passes — highest-volume-first and lowest-volume-first — merged
+    and deduplicated by market_id.
 
-    Polymarket's API returns a 422 error past a certain offset depth
-    instead of an empty page (confirmed in production). That's not
-    documented behavior anywhere public, so rather than assume a fixed
-    cutoff, this treats any error response as "no more pages" and returns
+    A single volume-descending pass only ever reaches the top ~2,100
+    markets by volume before hitting Gamma's pagination wall (see
+    `_fetch_sorted` below) — every lower-volume market on the platform
+    would be permanently invisible to a "monitor everything" bot with
+    only one pass. A second ascending pass covers the opposite end of the
+    spectrum, roughly doubling real coverage. Still not a guarantee of
+    literally every market if the platform has more than ~4,200 active
+    listings at once, but it closes the gap enormously versus one pass.
+    """
+    high_volume_first = _fetch_sorted(ascending=False)
+    low_volume_first = _fetch_sorted(ascending=True)
+
+    merged: dict[str, dict] = {}
+    for m in high_volume_first + low_volume_first:
+        if m["market_id"]:
+            merged[m["market_id"]] = m
+    return list(merged.values())
+
+
+def _fetch_sorted(ascending: bool) -> list[dict]:
+    """One paginated pass in a given sort direction. Polymarket's API
+    returns a 422 error past a certain offset depth instead of an empty
+    page (confirmed in production). That's not documented behavior
+    anywhere public, so rather than assume a fixed cutoff, this treats
+    any error response as "no more pages for this pass" and returns
     whatever was successfully fetched instead of crashing the whole scan
     over it. `MAX_PAGES` is a hard backstop in case the API ever starts
-    returning 200s forever.
-    """
+    returning 200s forever."""
     markets: list[dict] = []
     offset = 0
+    direction = "ascending" if ascending else "descending"
     with httpx.Client(timeout=30) as client:
         for _ in range(MAX_PAGES):
             resp = client.get(
@@ -49,13 +70,13 @@ def fetch_all_active_markets() -> list[dict]:
                     "offset": offset,
                     "active": True,
                     "order": "volume24hr",
-                    "ascending": False,
+                    "ascending": ascending,
                 },
             )
             if resp.status_code >= 400:
                 print(
-                    f"Gamma API returned {resp.status_code} at offset={offset}; "
-                    f"stopping pagination with {len(markets)} markets collected."
+                    f"Gamma API returned {resp.status_code} at offset={offset} ({direction} pass); "
+                    f"stopping this pass with {len(markets)} markets collected."
                 )
                 break
             page = resp.json()

@@ -33,3 +33,29 @@ def test_normalize_extracts_price_from_stringified_outcome_prices():
     result = normalize(raw)
     assert result["price_yes"] == 0.62
     assert result["tags"] == ["Politics", "Elections"]
+
+
+def test_fetch_all_active_markets_dedupes_across_both_passes(monkeypatch):
+    """The two-pass fetch (high-volume-first + low-volume-first) can
+    return the same market in both passes if the platform has fewer than
+    ~4,200 active markets. Must not produce duplicates downstream —
+    duplicate market_id in the same DB batch previously crashed the
+    entire scan (see the ON CONFLICT bug fixed earlier)."""
+    import shared.polymarket_client as pmc
+
+    call_count = {"n": 0}
+
+    def fake_fetch_sorted(ascending: bool):
+        call_count["n"] += 1
+        # Overlapping market_id on purpose, to verify dedup.
+        if ascending:
+            return [{"market_id": "0xAAA", "question": "A"}, {"market_id": "0xCCC", "question": "C"}]
+        return [{"market_id": "0xAAA", "question": "A"}, {"market_id": "0xBBB", "question": "B"}]
+
+    monkeypatch.setattr(pmc, "_fetch_sorted", fake_fetch_sorted)
+    result = pmc.fetch_all_active_markets()
+
+    assert call_count["n"] == 2  # both directions actually got called
+    ids = {m["market_id"] for m in result}
+    assert ids == {"0xAAA", "0xBBB", "0xCCC"}
+    assert len(result) == 3  # not 4 — 0xAAA deduplicated

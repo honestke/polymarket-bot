@@ -12,7 +12,11 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 4        # stay well under the 5-minute cadence
+    timeout-minutes: 8        # bumped from 4: two-pass fetch (see shared/polymarket_client.py)
+                               # roughly doubles API calls and processing time per run. The
+                               # concurrency block above means a slow run just delays the next
+                               # trigger rather than overlapping it, so this is a safety margin,
+                               # not a cadence guarantee.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
