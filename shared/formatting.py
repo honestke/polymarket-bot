@@ -128,11 +128,12 @@ def market_keyboard(market_row_short_id: str, slug: str | None) -> dict:
 # messages with this exact label, routed in services/bot/commands.py.
 MAIN_MENU_KEYBOARD = {
     "keyboard": [
-        ["🏆 Best Opportunities", "🔥 Trending"],
-        ["🆕 New Markets", "⏳ Ending Soon"],
-        ["📡 Live Updates", "📂 Categories"],
-        ["⭐ Saved", "📊 Stats"],
-        ["⚙️ Settings", "❓ Help"],
+        ["🏆 Best Opportunities", "💰 By Volume"],
+        ["🔥 Trending", "🆕 New Markets"],
+        ["⏳ Ending Soon", "📡 Live Updates"],
+        ["📂 Categories", "⭐ Saved"],
+        ["📊 Stats", "⚙️ Settings"],
+        ["❓ Help"],
     ],
     "resize_keyboard": True,
 }

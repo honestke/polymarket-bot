@@ -35,6 +35,7 @@ WELCOME_TEXT = (
 # command equivalents.
 _MENU_LABELS = {
     "🏆 Best Opportunities": "_best_menu",
+    "💰 By Volume": "_volume_menu",
     "🔥 Trending": "_trending",
     "🆕 New Markets": "_new",
     "⏳ Ending Soon": "_ending_menu",
@@ -143,9 +144,6 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
 
     elif action == "best":
         telegram_client.answer_callback_query(callback_query_id)
-        if value == "volume":
-            _count_menu(chat_id, "volume", "💰 By Volume")
-            return
         since_days = config.BEST_OPPORTUNITIES_WINDOWS.get(value)
         if since_days is None:
             return
@@ -198,10 +196,13 @@ def _best_menu(chat_id: int) -> None:
             [{"text": "🔥 Today", "callback_data": "best:today"}],
             [{"text": "📅 This Week", "callback_data": "best:week"}],
             [{"text": "🗓️ This Month", "callback_data": "best:month"}],
-            [{"text": "💰 By Volume", "callback_data": "best:volume"}],
         ]
     }
     telegram_client.send_message(chat_id, "🏆 *Best Opportunities* — pick a window:", reply_markup=keyboard)
+
+
+def _volume_menu(chat_id: int) -> None:
+    _count_menu(chat_id, "volume", "💰 By Volume")
 
 
 def _count_menu(chat_id: int, prefix: str, title: str) -> None:
@@ -376,7 +377,16 @@ def _add(chat_id: int, term: str) -> None:
         telegram_client.send_message(chat_id, "Usage: /add <keyword or category>")
         return
     _add_boost(chat_id, term)
-    telegram_client.send_message(chat_id, f"Added boost: {term}")
+    matches = db.search_markets(term, limit=5)
+    if matches:
+        telegram_client.send_message(chat_id, f"✅ Boosted \"{term}\" — here's what matches right now:")
+        _send_market_list(chat_id, matches, "🔍")
+    else:
+        telegram_client.send_message(
+            chat_id,
+            f"✅ Boosted \"{term}\" — no current markets match yet, but future rankings and alerts "
+            "will favor it if a matching market shows up.",
+        )
 
 
 def _remove(chat_id: int, term: str) -> None:

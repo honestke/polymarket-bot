@@ -91,6 +91,23 @@ def get_top_by_volume(limit: int = 10) -> list[dict]:
     return result.data
 
 
+def search_markets(term: str, limit: int = 5) -> list[dict]:
+    """Case-insensitive substring match on the question text. Used by
+    /add so boosting a keyword also shows what it currently matches,
+    instead of a bare confirmation with no visible effect."""
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .ilike("question", f"%{term}%")
+        .order("opportunity_score", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
 def get_top_opportunities(limit: int = 10) -> list[dict]:
     result = (
         get_client()
