@@ -31,7 +31,7 @@ WELCOME_TEXT = (
     "Use the buttons below to browse. Send /help anytime for the full command list."
 )
 
-SEARCH_PROMPT = "🔍 Type a keyword or phrase to search current markets:"
+SEARCH_PROMPT = "🔍 Type any word or words to search for a market:"
 
 # Persistent-menu button labels map to the same handlers as their slash
 # command equivalents.
@@ -221,7 +221,12 @@ def _volume_menu(chat_id: int) -> None:
 
 
 def _search_menu(chat_id: int) -> None:
+    db.set_pending_action(chat_id, "search")
     telegram_client.send_message(chat_id, SEARCH_PROMPT, reply_markup={"force_reply": True})
+
+
+def get_and_clear_pending_action(chat_id: int) -> str | None:
+    return db.get_and_clear_pending_action(chat_id)
 
 
 def _search(chat_id: int, term: str) -> None:

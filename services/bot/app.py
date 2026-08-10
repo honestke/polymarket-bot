@@ -61,15 +61,16 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
     chat_id = message.get("chat", {}).get("id")
     text = (message.get("text") or "").strip()
 
-    # A reply to our own force_reply search prompt is search input, not a
-    # command — Telegram's force_reply is the cleanest native way to get
-    # free-text input without any custom session/state tracking.
-    reply_to = message.get("reply_to_message", {})
-    if chat_id and text and reply_to.get("text") == commands.SEARCH_PROMPT:
-        commands.handle_search_reply(chat_id, text)
-        return {"ok": True}
-
     if chat_id and text:
+        # Check for a pending free-text capture (e.g. Search) before
+        # treating the message as a command/menu tap. Tracked in the DB
+        # per chat_id — reliable across every Telegram client, unlike
+        # depending on reply_to_message threading (the earlier approach,
+        # which wasn't consistently triggering).
+        pending = commands.get_and_clear_pending_action(chat_id)
+        if pending == "search":
+            commands.handle_search_reply(chat_id, text)
+            return {"ok": True}
         commands.handle(chat_id, text)
 
     return {"ok": True}

@@ -317,6 +317,27 @@ def set_push_threshold(chat_id: int, value: float) -> None:
     ).execute()
 
 
+def set_pending_action(chat_id: int, action: str | None) -> None:
+    """Tracks 'this chat is waiting for a specific kind of free-text
+    reply' (currently just 'search'). Reliable across every Telegram
+    client, unlike depending on reply_to_message threading — see
+    migrations/007_pending_action.sql."""
+    get_client().table("user_settings").upsert(
+        {"chat_id": chat_id, "pending_action": action},
+        on_conflict="chat_id",
+    ).execute()
+
+
+def get_and_clear_pending_action(chat_id: int) -> str | None:
+    """Reads the pending action, if any, and immediately clears it so a
+    normal follow-up message afterward isn't mistakenly captured too."""
+    result = get_client().table("user_settings").select("pending_action").eq("chat_id", chat_id).execute()
+    action = result.data[0].get("pending_action") if result.data else None
+    if action:
+        set_pending_action(chat_id, None)
+    return action
+
+
 def get_trending(hours: float = 6, limit: int = 10) -> list[dict]:
     """Markets with a price_move or volume_spike alert (push OR feed —
     trending is about recent movement, not whether it was loud enough to
