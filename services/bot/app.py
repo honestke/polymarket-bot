@@ -6,9 +6,33 @@ runs as scheduled scripts with no persistent process at all.
 from fastapi import FastAPI, Header, HTTPException, Request
 
 from services.bot import commands
-from shared import config
+from shared import config, telegram_client
 
 app = FastAPI()
+
+BOT_COMMANDS = [
+    {"command": "top", "description": "Highest-ranked opportunities right now"},
+    {"command": "trending", "description": "Markets with significant recent activity"},
+    {"command": "new", "description": "Most recently discovered markets"},
+    {"command": "ending", "description": "Markets closest to resolution"},
+    {"command": "live", "description": "Recent activity below your push threshold"},
+    {"command": "categories", "description": "Browse by category"},
+    {"command": "saved", "description": "Markets you've saved"},
+    {"command": "watchlist", "description": "Show your priority boosts"},
+    {"command": "add", "description": "Boost matching markets: /add <keyword>"},
+    {"command": "remove", "description": "Remove a boost: /remove <keyword>"},
+    {"command": "threshold", "description": "Set push cutoff: /threshold <0-100>"},
+    {"command": "stats", "description": "Basic system stats"},
+    {"command": "help", "description": "Show all commands"},
+]
+
+
+@app.on_event("startup")
+async def register_commands() -> None:
+    """Runs automatically every time this service boots (including every
+    deploy) — registers the command list with Telegram so it shows up in
+    the native menu with no manual curl step required, ever."""
+    telegram_client.set_my_commands(BOT_COMMANDS)
 
 
 @app.post("/webhook")

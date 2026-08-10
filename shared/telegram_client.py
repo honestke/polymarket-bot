@@ -41,3 +41,11 @@ def set_webhook(url: str) -> dict:
         timeout=10,
     )
     return resp.json()
+
+
+def set_my_commands(commands: list[dict]) -> None:
+    """Registers the bot's command list with Telegram so it shows up in
+    the native menu (the icon next to the message box, or typing '/'
+    autocompletes with descriptions) — without this, a new user has to
+    already know to type /start with no prompt at all."""
+    httpx.post(f"{_api_base()}/setMyCommands", json={"commands": commands}, timeout=10)

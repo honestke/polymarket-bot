@@ -127,6 +127,7 @@ MAIN_MENU_KEYBOARD = {
         ["🏆 Best Opportunities", "🔥 Trending"],
         ["🆕 New Markets", "⏳ Ending Soon"],
         ["📡 Live Updates", "📂 Categories"],
+        ["⭐ Saved", "📊 Stats"],
         ["⚙️ Settings"],
     ],
     "resize_keyboard": True,

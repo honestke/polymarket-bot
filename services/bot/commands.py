@@ -35,6 +35,8 @@ _MENU_LABELS = {
     "⏳ Ending Soon": "_ending_menu",
     "📡 Live Updates": "_live",
     "📂 Categories": "_categories",
+    "⭐ Saved": "_saved",
+    "📊 Stats": "_stats",
     "⚙️ Settings": "_settings",
 }
 
@@ -65,7 +67,7 @@ def handle(chat_id: int, text: str) -> None:
     elif command == "/categories":
         _categories(chat_id)
     elif command == "/saved":
-        _send_market_list(chat_id, db.get_saved_markets(chat_id), "⭐", empty_msg="No saved markets yet — tap ⭐ Save on any market card.")
+        _saved(chat_id)
     elif command == "/watchlist":
         _watchlist(chat_id)
     elif command == "/add":
@@ -185,6 +187,10 @@ def _new(chat_id: int) -> None:
     _send_market_list(chat_id, db.get_recent_markets(limit=5), "🆕")
 
 
+def _saved(chat_id: int) -> None:
+    _send_market_list(chat_id, db.get_saved_markets(chat_id), "⭐", empty_msg="No saved markets yet — tap ⭐ Save on any market card.")
+
+
 def _ending_menu(chat_id: int) -> None:
     keyboard = {
         "inline_keyboard": [
@@ -255,6 +261,11 @@ def _settings(chat_id: int) -> None:
     )
     keyboard = {
         "inline_keyboard": [
+            [
+                {"text": "20", "callback_data": "threshold:20"},
+                {"text": "30", "callback_data": "threshold:30"},
+                {"text": "40", "callback_data": "threshold:40"},
+            ],
             [
                 {"text": "50", "callback_data": "threshold:50"},
                 {"text": "60", "callback_data": "threshold:60"},
