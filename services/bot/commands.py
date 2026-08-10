@@ -231,10 +231,19 @@ def get_and_clear_pending_action(chat_id: int) -> str | None:
 
 def _search(chat_id: int, term: str) -> None:
     if not term:
-        telegram_client.send_message(chat_id, "Usage: /search <keyword or phrase>")
+        telegram_client.send_message(chat_id, "Usage: /search <keyword or phrase>", reply_markup=formatting.MAIN_MENU_KEYBOARD)
         return
     matches = db.search_markets(term, limit=10)
-    _send_market_list(chat_id, matches, "🔍", empty_msg=f'No current markets match "{term}".')
+    if not matches:
+        telegram_client.send_message(
+            chat_id, f'No current markets match "{term}".', reply_markup=formatting.MAIN_MENU_KEYBOARD
+        )
+        return
+    _send_market_list(chat_id, matches, "🔍")
+    # force_reply (used to prompt for search input) hides the persistent
+    # menu keyboard on the client — nothing restores it automatically.
+    # This final message brings the menu buttons back.
+    telegram_client.send_message(chat_id, "🔍 Search again anytime.", reply_markup=formatting.MAIN_MENU_KEYBOARD)
 
 
 def handle_search_reply(chat_id: int, term: str) -> None:
