@@ -189,6 +189,69 @@ def get_live_feed(limit: int = 15) -> list[dict]:
     return result.data
 
 
+def get_push_threshold(chat_id: int) -> float:
+    """Per-chat push cutoff (0-1). Falls back to config's default if the
+    user hasn't customized it — see /threshold in services/bot/commands.py."""
+    result = get_client().table("user_settings").select("push_threshold").eq("chat_id", chat_id).execute()
+    if result.data:
+        return float(result.data[0]["push_threshold"])
+    return config.PUSH_OPPORTUNITY_THRESHOLD
+
+
+def set_push_threshold(chat_id: int, value: float) -> None:
+    get_client().table("user_settings").upsert(
+        {"chat_id": chat_id, "push_threshold": value, "updated_at": datetime.now(timezone.utc).isoformat()},
+        on_conflict="chat_id",
+    ).execute()
+
+
+def get_trending(hours: float = 6, limit: int = 10) -> list[dict]:
+    """Markets with a price_move or volume_spike alert (push OR feed —
+    trending is about recent movement, not whether it was loud enough to
+    interrupt someone) in the last `hours`. Deduplicated to one entry per
+    market (the most recent), ranked by current opportunity_score."""
+    since_dt = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    result = (
+        get_client()
+        .table("alerts")
+        .select("market_id, sent_at, markets(*)")
+        .in_("alert_type", ["price_move", "volume_spike"])
+        .gte("sent_at", since_dt)
+        .order("sent_at", desc=True)
+        .limit(100)
+        .execute()
+    )
+    seen: set[str] = set()
+    trending: list[dict] = []
+    for row in result.data:
+        mid = row.get("market_id")
+        if not mid or mid in seen or not row.get("markets"):
+            continue
+        seen.add(mid)
+        trending.append(row["markets"])
+    trending.sort(key=lambda m: m.get("opportunity_score") or 0, reverse=True)
+    return trending[:limit]
+
+
+def get_ending_in_calendar_month(year: int, month: int, limit: int = 10) -> list[dict]:
+    """Markets resolving within a specific calendar month, e.g. December
+    2026 — separate from the relative Ending Soon buckets."""
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    end = datetime(year + 1, 1, 1, tzinfo=timezone.utc) if month == 12 else datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .gte("end_date", start.isoformat())
+        .lt("end_date", end.isoformat())
+        .order("opportunity_score", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
 def get_categories() -> list[dict]:
     """Returns [{'category': 'AI', 'count': 42}, ...]. Supabase's client
     doesn't do GROUP BY directly, so this pulls the category column for

@@ -60,12 +60,14 @@ ALERT_COOLDOWN_MINUTES = {
 }
 
 # (min_days_remaining, max_days_remaining) — used by the "Ending Soon"
-# time-bucket picker. None means unbounded on that side.
+# time-bucket picker. All buckets start at 0 (i.e. "<X from now"), except
+# 'longer' which is the overflow bucket for anything past the largest cutoff.
 ENDING_SOON_BUCKETS = {
+    "12h": (0, 0.5),
     "24h": (0, 1),
-    "7d": (1, 7),
-    "2w": (7, 14),
-    "1m": (14, 30),
+    "3d": (0, 3),
+    "week": (0, 7),
+    "month": (0, 30),
     "longer": (30, None),
 }
 

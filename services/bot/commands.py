@@ -1,9 +1,13 @@
+import calendar
+from datetime import datetime, timezone
+
 from shared import config, db, formatting, telegram_client
 
 HELP_TEXT = (
     "*Commands*\n"
     "Use the menu buttons below, or these commands directly:\n\n"
     "/top - highest-ranked opportunities right now\n"
+    "/trending - markets with significant recent activity\n"
     "/new - most recently discovered markets\n"
     "/ending - markets closest to resolution\n"
     "/live - recent activity that didn't warrant a push notification\n"
@@ -12,19 +16,21 @@ HELP_TEXT = (
     "/watchlist - show your priority boosts\n"
     "/add <keyword or category> - boost matching markets in rankings/alerts\n"
     "/remove <keyword or category> - remove a boost\n"
+    "/threshold <0-100> - set your personal push-notification cutoff\n"
     "/stats - basic system stats\n"
     "/help - this message\n\n"
     "This bot monitors the *entire* Polymarket platform by default. "
     "Boosts change how markets are prioritized in alerts and rankings — "
     "they never limit which markets get tracked.\n\n"
-    "Only the highest-scoring events push an instant notification — "
-    "everything else still gets logged, just check 📡 Live Updates for it."
+    "Only markets scoring above your threshold push an instant notification "
+    "— everything else still gets logged, just check 📡 Live Updates for it."
 )
 
 # Persistent-menu button labels map to the same handlers as their slash
 # command equivalents.
 _MENU_LABELS = {
     "🏆 Best Opportunities": "_best_menu",
+    "🔥 Trending": "_trending",
     "🆕 New Markets": "_new",
     "⏳ Ending Soon": "_ending_menu",
     "📡 Live Updates": "_live",
@@ -48,6 +54,8 @@ def handle(chat_id: int, text: str) -> None:
         telegram_client.send_message(chat_id, HELP_TEXT)
     elif command == "/top":
         _best_menu(chat_id)
+    elif command == "/trending":
+        _trending(chat_id)
     elif command == "/new":
         _new(chat_id)
     elif command == "/ending":
@@ -64,6 +72,8 @@ def handle(chat_id: int, text: str) -> None:
         _add(chat_id, arg)
     elif command == "/remove":
         _remove(chat_id, arg)
+    elif command == "/threshold":
+        _set_threshold(chat_id, arg)
     elif command == "/stats":
         _stats(chat_id)
     else:
@@ -72,8 +82,8 @@ def handle(chat_id: int, text: str) -> None:
 
 def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
     """Handles button presses: View Details / Save / category picks /
-    Ending Soon time buckets / Best Opportunities time windows.
-    'Open Market' is a plain URL button and never reaches here."""
+    Ending Soon buckets (relative + calendar month) / Best Opportunities
+    time windows. 'Open Market' is a plain URL button, never reaches here."""
     action, _, value = data.partition(":")
 
     if action == "details":
@@ -105,6 +115,23 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
             return
         min_days, max_days = bucket
         _send_market_list(chat_id, db.get_ending_in_range(min_days, max_days, limit=5), "⏳")
+
+    elif action == "endingmonthmenu":
+        telegram_client.answer_callback_query(callback_query_id)
+        _send_month_picker(chat_id)
+
+    elif action == "endingmonth":
+        telegram_client.answer_callback_query(callback_query_id)
+        try:
+            year_str, month_str = value.split("-")
+            year, month = int(year_str), int(month_str)
+        except ValueError:
+            return
+        label = f"{calendar.month_name[month]} {year}"
+        _send_market_list(
+            chat_id, db.get_ending_in_calendar_month(year, month, limit=5), "📅",
+            empty_msg=f"Nothing resolving in {label} yet.",
+        )
 
     elif action == "best":
         telegram_client.answer_callback_query(callback_query_id)
@@ -138,6 +165,13 @@ def _best_menu(chat_id: int) -> None:
     telegram_client.send_message(chat_id, "🏆 *Best Opportunities* — pick a window:", reply_markup=keyboard)
 
 
+def _trending(chat_id: int) -> None:
+    _send_market_list(
+        chat_id, db.get_trending(hours=6, limit=10), "🔥",
+        empty_msg="Nothing trending in the last 6 hours.",
+    )
+
+
 def _new(chat_id: int) -> None:
     _send_market_list(chat_id, db.get_recent_markets(limit=5), "🆕")
 
@@ -145,14 +179,29 @@ def _new(chat_id: int) -> None:
 def _ending_menu(chat_id: int) -> None:
     keyboard = {
         "inline_keyboard": [
-            [{"text": "🔴 Within 24 Hours", "callback_data": "ending:24h"}],
-            [{"text": "🟠 Within 7 Days", "callback_data": "ending:7d"}],
-            [{"text": "🟡 Within 2 Weeks", "callback_data": "ending:2w"}],
-            [{"text": "🟢 Within 1 Month", "callback_data": "ending:1m"}],
-            [{"text": "🔵 Longer Than 1 Month", "callback_data": "ending:longer"}],
+            [{"text": "🔴 <12 Hours", "callback_data": "ending:12h"}],
+            [{"text": "🟠 <24 Hours", "callback_data": "ending:24h"}],
+            [{"text": "🟡 <3 Days", "callback_data": "ending:3d"}],
+            [{"text": "🟢 <1 Week", "callback_data": "ending:week"}],
+            [{"text": "🔵 <1 Month", "callback_data": "ending:month"}],
+            [{"text": "⚪ Longer Than 1 Month", "callback_data": "ending:longer"}],
+            [{"text": "📅 Pick a Specific Month", "callback_data": "endingmonthmenu:"}],
         ]
     }
     telegram_client.send_message(chat_id, "⏳ *Ending Soon* — pick a window:", reply_markup=keyboard)
+
+
+def _send_month_picker(chat_id: int) -> None:
+    now = datetime.now(timezone.utc)
+    buttons = []
+    y, m = now.year, now.month
+    for _ in range(6):
+        buttons.append([{"text": f"{calendar.month_name[m]} {y}", "callback_data": f"endingmonth:{y}-{m}"}])
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    telegram_client.send_message(chat_id, "📅 *Pick a month:*", reply_markup={"inline_keyboard": buttons})
 
 
 def _live(chat_id: int) -> None:
@@ -160,7 +209,7 @@ def _live(chat_id: int) -> None:
     if not feed:
         telegram_client.send_message(chat_id, "No recent activity logged yet.")
         return
-    lines = ["📡 *Live Updates* — recent activity below the push threshold:\n"]
+    lines = ["📡 *Live Updates* — recent activity below your push threshold:\n"]
     lines.extend(formatting.format_feed_line(row) for row in feed)
     telegram_client.send_message(chat_id, "\n".join(lines))
 
@@ -183,17 +232,43 @@ def _settings(chat_id: int) -> None:
     boosts = [b for b in db.get_priority_boosts() if b["chat_id"] == chat_id]
     boost_lines = "\n".join(f"- {b['keyword_or_category']} (weight {b['weight']})" for b in boosts) or "None set."
     result = db.get_client().table("markets").select("market_id", count="exact").execute()
+    threshold = db.get_push_threshold(chat_id)
     text = (
         "⚙️ *Settings*\n\n"
         f"Tracking {result.count} active markets platform-wide.\n\n"
         f"*Your priority boosts:*\n{boost_lines}\n\n"
         "/add <keyword or category> — boost matching markets\n"
         "/remove <keyword or category> — remove a boost\n\n"
-        f"Push notifications fire only for markets scoring "
-        f"{int(config.PUSH_OPPORTUNITY_THRESHOLD * 100)}/100 or higher — "
-        "everything else is still logged in 📡 Live Updates."
+        f"*Push threshold:* {int(threshold * 100)}/100\n"
+        "Only markets scoring at or above this push an instant notification — "
+        "everything else is still logged in 📡 Live Updates.\n"
+        "/threshold <0-100> — change it"
     )
     telegram_client.send_message(chat_id, text)
+
+
+def _set_threshold(chat_id: int, arg: str) -> None:
+    if not arg:
+        current = db.get_push_threshold(chat_id)
+        telegram_client.send_message(
+            chat_id,
+            f"Current push threshold: {int(current * 100)}/100.\nUsage: /threshold <0-100>",
+        )
+        return
+    try:
+        value = float(arg)
+    except ValueError:
+        telegram_client.send_message(chat_id, "That doesn't look like a number. Usage: /threshold <0-100>")
+        return
+    if not (0 <= value <= 100):
+        telegram_client.send_message(chat_id, "Enter a number between 0 and 100.")
+        return
+    db.set_push_threshold(chat_id, value / 100)
+    telegram_client.send_message(
+        chat_id,
+        f"Push threshold set to {value:.0f}/100. Markets scoring at or above this will push instantly; "
+        "everything else still logs to 📡 Live Updates.",
+    )
 
 
 def _watchlist(chat_id: int) -> None:

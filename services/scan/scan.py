@@ -43,6 +43,7 @@ def run() -> None:
     ids = [m["market_id"] for m in raw_markets]
     previous = db.get_markets_by_ids(ids)
     boosts = db.get_priority_boosts()
+    push_threshold = db.get_push_threshold(config.DEFAULT_CHAT_ID)
     now = datetime.now(timezone.utc)
 
     market_rows: list[dict] = []
@@ -135,7 +136,7 @@ def run() -> None:
         if is_new:
             should_snapshot = True
             if opportunity >= config.NEW_MARKET_ALERT_THRESHOLD:
-                channel = "push" if opportunity >= config.PUSH_OPPORTUNITY_THRESHOLD else "feed"
+                channel = "push" if opportunity >= push_threshold else "feed"
                 db.insert_alert({
                     "market_id": market_id,
                     "chat_id": chat_id,
@@ -151,8 +152,8 @@ def run() -> None:
             # — not interesting enough even for the feed. They're still
             # tracked and scored, just surfaced only via /top or /new.
         else:
-            price_fired = alert_engine.maybe_alert_price_move(row, prev_price, chat_id)
-            volume_fired = alert_engine.maybe_alert_volume_spike(row, prev_row.get("last_volume_24h"), chat_id)
+            price_fired = alert_engine.maybe_alert_price_move(row, prev_price, chat_id, push_threshold)
+            volume_fired = alert_engine.maybe_alert_volume_spike(row, prev_row.get("last_volume_24h"), chat_id, push_threshold)
             alert_engine.maybe_alert_tier_change(row, old_tier, chat_id)
             ai_trigger = price_fired or volume_fired
             if price_fired or volume_fired or volatility_points >= config.SNAPSHOT_NOISE_THRESHOLD_POINTS:

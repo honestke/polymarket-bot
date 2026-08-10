@@ -8,7 +8,16 @@ Polymarket doesn't reliably document a market *creation* timestamp on this
 endpoint — `created_on_polymarket_at` will likely come back None, in which
 case `discovery_latency_seconds` falls back to None in the scan job (see
 README for the honest fallback).
+
+IMPORTANT: `outcomePrices`, `outcomes`, and `clobTokenIds` are returned as
+JSON-ENCODED STRINGS (e.g. '["0.62", "0.38"]'), not native arrays — this
+is a well-documented Polymarket API quirk. Indexing into the raw string
+silently grabs a character instead of a price and fails without an
+exception, which is what caused every market card to show a blank
+probability until this was fixed. Always json.loads() these fields first.
 """
+import json
+
 import httpx
 
 from . import config
@@ -60,7 +69,7 @@ def fetch_all_active_markets() -> list[dict]:
 
 
 def normalize(raw: dict) -> dict:
-    outcome_prices = raw.get("outcomePrices") or []
+    outcome_prices = _parse_json_field(raw.get("outcomePrices"))
     price_yes = _safe_float(outcome_prices[0]) if outcome_prices else None
 
     # Polymarket's public URL (polymarket.com/event/{slug}) needs the
@@ -78,7 +87,7 @@ def normalize(raw: dict) -> dict:
         "market_id": raw.get("conditionId"),
         "question": raw.get("question"),
         "slug": slug,
-        "tags": raw.get("tags") or [],
+        "tags": _parse_json_field(raw.get("tags")),
         "price_yes": price_yes,
         "volume_24h": _safe_float(raw.get("volume24hr")),
         "liquidity": _safe_float(raw.get("liquidity")),
@@ -93,3 +102,17 @@ def _safe_float(value) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_json_field(value) -> list:
+    """Handles Gamma's JSON-string-encoded array fields. Returns [] for
+    anything that isn't a real list or a string containing one."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, ValueError):
+            return []
+    return []

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from . import config, db, formatting, telegram_client
 
 
-def maybe_alert_price_move(market_row: dict, prev_price: float | None, chat_id) -> bool:
+def maybe_alert_price_move(market_row: dict, prev_price: float | None, chat_id, push_threshold: float) -> bool:
     new_price = market_row.get("last_price_yes")
     if prev_price is None or new_price is None:
         return False
@@ -24,17 +24,17 @@ def maybe_alert_price_move(market_row: dict, prev_price: float | None, chat_id) 
     if delta_points < config.PRICE_MOVE_THRESHOLD_POINTS:
         return False
     highlight = f"Moved {prev_price:.0%} → {new_price:.0%}  (Δ{delta_points:.1f} pts)"
-    return _fire_if_due(market_row, "price_move", delta_points, chat_id, icon="📈", highlight=highlight)
+    return _fire_if_due(market_row, "price_move", delta_points, chat_id, push_threshold, icon="📈", highlight=highlight)
 
 
-def maybe_alert_volume_spike(market_row: dict, trailing_volume: float | None, chat_id) -> bool:
+def maybe_alert_volume_spike(market_row: dict, trailing_volume: float | None, chat_id, push_threshold: float) -> bool:
     new_volume = market_row.get("last_volume_24h")
     if not trailing_volume or new_volume is None:
         return False
     if new_volume < trailing_volume * config.VOLUME_SPIKE_MULTIPLIER:
         return False
     highlight = f"Volume spike: ≥{config.VOLUME_SPIKE_MULTIPLIER:.0f}× trailing average"
-    return _fire_if_due(market_row, "volume_spike", new_volume, chat_id, icon="🔥", highlight=highlight)
+    return _fire_if_due(market_row, "volume_spike", new_volume, chat_id, push_threshold, icon="🔥", highlight=highlight)
 
 
 def maybe_alert_tier_change(market_row: dict, old_tier: str | None, chat_id) -> bool:
@@ -55,7 +55,7 @@ def maybe_alert_tier_change(market_row: dict, old_tier: str | None, chat_id) -> 
     return True
 
 
-def _fire_if_due(market_row: dict, alert_type: str, value: float, chat_id, icon: str, highlight: str) -> bool:
+def _fire_if_due(market_row: dict, alert_type: str, value: float, chat_id, push_threshold: float, icon: str, highlight: str) -> bool:
     """Two rules gate whether this fires at all: a time cooldown, AND (if
     still cooling down) the value must have moved meaningfully further
     than last time — this stops a market oscillating around the threshold
@@ -76,7 +76,7 @@ def _fire_if_due(market_row: dict, alert_type: str, value: float, chat_id, icon:
             return False
 
     opportunity = market_row.get("opportunity_score") or 0.0
-    channel = "push" if opportunity >= config.PUSH_OPPORTUNITY_THRESHOLD else "feed"
+    channel = "push" if opportunity >= push_threshold else "feed"
     _log_alert(market_row, alert_type, chat_id, value=value, channel=channel, icon=icon, highlight=highlight)
 
     minutes = config.ALERT_COOLDOWN_MINUTES.get(tier, 60)

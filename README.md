@@ -87,11 +87,12 @@ real market behavior.
 
 ```
 pip install -r requirements.txt
+export SUPABASE_URL=https://fake.supabase.co SUPABASE_SERVICE_KEY=fake TELEGRAM_BOT_TOKEN=fake
 pytest tests/
 ```
 
-The included tests only cover `shared/scoring.py` (pure functions, no
-network or secrets needed) — a reasonable starting point, not full
-coverage. `polymarket_client.py`, `db.py`, and the Telegram/AI integrations
-need either live credentials or mocks to test meaningfully, neither of
-which this environment had access to while building this.
+The dummy env vars are needed because `shared/config.py` fails fast on
+missing secrets at import time (by design — see its comments), and some
+test modules import code that pulls in `shared/config.py` transitively.
+No real credentials are used or contacted; nothing in the test suite
+touches the network.
