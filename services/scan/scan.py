@@ -176,6 +176,9 @@ def run() -> None:
             summarize_market(market_id, m["question"], prev_price, m["price_yes"], tier)
 
     db.upsert_markets(market_rows)
+    resolved_count = db.mark_expired_as_resolved()
+    if resolved_count:
+        print(f"Marked {resolved_count} markets resolved (end_date has passed).")
     db.insert_price_snapshots(snapshot_rows)
     print(f"Scan complete: {len(market_rows)} markets processed, {len(snapshot_rows)} snapshots written.")
 

@@ -140,6 +140,15 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
             return
         _send_market_list(chat_id, db.get_top_opportunities_since(since_days, limit=5), "🏆")
 
+    elif action == "threshold":
+        try:
+            pct = float(value)
+        except ValueError:
+            telegram_client.answer_callback_query(callback_query_id, "Invalid value.")
+            return
+        db.set_push_threshold(chat_id, pct / 100)
+        telegram_client.answer_callback_query(callback_query_id, f"Threshold set to {pct:.0f}/100")
+
     else:
         telegram_client.answer_callback_query(callback_query_id)
 
@@ -242,9 +251,23 @@ def _settings(chat_id: int) -> None:
         f"*Push threshold:* {int(threshold * 100)}/100\n"
         "Only markets scoring at or above this push an instant notification — "
         "everything else is still logged in 📡 Live Updates.\n"
-        "/threshold <0-100> — change it"
+        "Tap a preset below, or send /threshold <0-100> for a custom value."
     )
-    telegram_client.send_message(chat_id, text)
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "50", "callback_data": "threshold:50"},
+                {"text": "60", "callback_data": "threshold:60"},
+                {"text": "70", "callback_data": "threshold:70"},
+            ],
+            [
+                {"text": "80", "callback_data": "threshold:80"},
+                {"text": "85 (default)", "callback_data": "threshold:85"},
+                {"text": "95", "callback_data": "threshold:95"},
+            ],
+        ]
+    }
+    telegram_client.send_message(chat_id, text, reply_markup=keyboard)
 
 
 def _set_threshold(chat_id: int, arg: str) -> None:

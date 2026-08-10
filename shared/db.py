@@ -91,6 +91,46 @@ def get_top_opportunities(limit: int = 10) -> list[dict]:
     return result.data
 
 
+def get_active_market_ids() -> set[str]:
+    """General-purpose helper — not currently used by the resolution
+    sweep (see mark_expired_as_resolved for why 'missing from a fetch'
+    isn't a safe signal), kept because it's a reasonable primitive other
+    features may want later."""
+    result = get_client().table("markets").select("market_id").eq("status", "active").execute()
+    return {row["market_id"] for row in result.data}
+
+
+def mark_resolved(market_ids: list[str]) -> None:
+    if not market_ids:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    for chunk in _chunks(market_ids):
+        get_client().table("markets").update({"status": "resolved", "updated_at": now}).in_(
+            "market_id", chunk
+        ).execute()
+
+
+def mark_expired_as_resolved() -> int:
+    """Flips status to 'resolved' for any market whose end_date has
+    passed. Deliberately NOT based on 'missing from the latest scan
+    fetch' — Gamma's pagination caps each scan at roughly the top ~2,100
+    markets by volume (see shared/polymarket_client.py), so a real,
+    still-active but lower-volume market can simply fall outside a given
+    scan's slice without being resolved. end_date is a property of the
+    market itself, independent of what any single fetch happened to
+    include, so it doesn't have that failure mode."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    result = (
+        get_client()
+        .table("markets")
+        .update({"status": "resolved", "updated_at": now_iso})
+        .eq("status", "active")
+        .lt("end_date", now_iso)
+        .execute()
+    )
+    return len(result.data or [])
+
+
 def get_market(market_id: str) -> dict | None:
     result = get_client().table("markets").select("*").eq("market_id", market_id).execute()
     return result.data[0] if result.data else None
