@@ -1,7 +1,7 @@
 import calendar
 from datetime import datetime, timezone
 
-from shared import config, db, formatting, telegram_client
+from shared import config, db, formatting, scoring, telegram_client
 
 HELP_TEXT = (
     "*Commands*\n"
@@ -157,6 +157,16 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
         db.set_push_threshold(chat_id, pct / 100)
         telegram_client.answer_callback_query(callback_query_id, f"Threshold set to {pct:.0f}/100")
 
+    elif action == "addboost":
+        _add_boost(chat_id, value)
+        telegram_client.answer_callback_query(callback_query_id, f"Boosted: {value}")
+        _settings(chat_id)  # resend so the button list reflects the change immediately
+
+    elif action == "removeboost":
+        _remove_boost(chat_id, value)
+        telegram_client.answer_callback_query(callback_query_id, f"Removed: {value}")
+        _settings(chat_id)
+
     else:
         telegram_client.answer_callback_query(callback_query_id)
 
@@ -255,40 +265,54 @@ def _categories(chat_id: int) -> None:
 
 def _settings(chat_id: int) -> None:
     boosts = [b for b in db.get_priority_boosts() if b["chat_id"] == chat_id]
-    boost_lines = "\n".join(f"- {b['keyword_or_category']} (weight {b['weight']})" for b in boosts) or "None set."
+    boost_lines = "\n".join(f"- {b['keyword_or_category']}" for b in boosts) or "None set."
     result = db.get_client().table("markets").select("market_id", count="exact").execute()
     threshold = db.get_push_threshold(chat_id)
     text = (
         "⚙️ *Settings*\n\n"
         f"Tracking {result.count} active markets platform-wide.\n\n"
-        f"*Your priority boosts:*\n{boost_lines}\n\n"
-        "/add <keyword or category> — boost matching markets\n"
-        "/remove <keyword or category> — remove a boost\n\n"
+        f"*Your priority boosts:*\n{boost_lines}\n"
+        "Tap ✕ below to remove one, or tap a category to add it — no typing needed. "
+        "(A custom keyword still needs /add <word> since it can't be listed as a button.)\n\n"
         f"*Push threshold:* {int(threshold * 100)}/100\n"
         "Only markets scoring at or above this push an instant notification — "
         "everything else is still logged in 📡 Live Updates.\n"
-        "Tap a preset below, or send /threshold <0-100> for a custom value."
+        "Tap a preset below."
     )
-    keyboard = {
-        "inline_keyboard": [
-            [
-                {"text": "20", "callback_data": "threshold:20"},
-                {"text": "30", "callback_data": "threshold:30"},
-                {"text": "40", "callback_data": "threshold:40"},
-            ],
-            [
-                {"text": "50", "callback_data": "threshold:50"},
-                {"text": "60", "callback_data": "threshold:60"},
-                {"text": "70", "callback_data": "threshold:70"},
-            ],
-            [
-                {"text": "80", "callback_data": "threshold:80"},
-                {"text": "85 (default)", "callback_data": "threshold:85"},
-                {"text": "95", "callback_data": "threshold:95"},
-            ],
-        ]
-    }
-    telegram_client.send_message(chat_id, text, reply_markup=keyboard)
+
+    keyboard_rows = [
+        [
+            {"text": "20", "callback_data": "threshold:20"},
+            {"text": "30", "callback_data": "threshold:30"},
+            {"text": "40", "callback_data": "threshold:40"},
+        ],
+        [
+            {"text": "50", "callback_data": "threshold:50"},
+            {"text": "60", "callback_data": "threshold:60"},
+            {"text": "70", "callback_data": "threshold:70"},
+        ],
+        [
+            {"text": "80", "callback_data": "threshold:80"},
+            {"text": "85 (default)", "callback_data": "threshold:85"},
+            {"text": "95", "callback_data": "threshold:95"},
+        ],
+    ]
+
+    # One "✕ remove" button per existing boost — truncated defensively so
+    # callback_data can never exceed Telegram's 64-byte limit (same bug
+    # class as the market_id/short_id issue fixed earlier).
+    for b in boosts:
+        term = b["keyword_or_category"]
+        keyboard_rows.append([{"text": f"✕ Remove {term}", "callback_data": f"removeboost:{term[:45]}"}])
+
+    # Add-by-category, two per row, only for categories not already boosted.
+    existing_terms = {b["keyword_or_category"] for b in boosts}
+    categories = [c for c in scoring.CATEGORY_KEYWORDS if c not in existing_terms]
+    for i in range(0, len(categories), 2):
+        row = [{"text": f"➕ {c}", "callback_data": f"addboost:{c}"} for c in categories[i:i + 2]]
+        keyboard_rows.append(row)
+
+    telegram_client.send_message(chat_id, text, reply_markup={"inline_keyboard": keyboard_rows})
 
 
 def _set_threshold(chat_id: int, arg: str) -> None:
@@ -328,17 +352,25 @@ def _add(chat_id: int, term: str) -> None:
     if not term:
         telegram_client.send_message(chat_id, "Usage: /add <keyword or category>")
         return
-    db.get_client().table("priority_boosts").insert(
-        {"chat_id": chat_id, "keyword_or_category": term, "weight": 1.5}
-    ).execute()
+    _add_boost(chat_id, term)
     telegram_client.send_message(chat_id, f"Added boost: {term}")
 
 
 def _remove(chat_id: int, term: str) -> None:
+    _remove_boost(chat_id, term)
+    telegram_client.send_message(chat_id, f"Removed boost (if it existed): {term}")
+
+
+def _add_boost(chat_id: int, term: str) -> None:
+    db.get_client().table("priority_boosts").insert(
+        {"chat_id": chat_id, "keyword_or_category": term, "weight": 1.5}
+    ).execute()
+
+
+def _remove_boost(chat_id: int, term: str) -> None:
     db.get_client().table("priority_boosts").delete().eq("chat_id", chat_id).eq(
         "keyword_or_category", term
     ).execute()
-    telegram_client.send_message(chat_id, f"Removed boost (if it existed): {term}")
 
 
 def _stats(chat_id: int) -> None:
