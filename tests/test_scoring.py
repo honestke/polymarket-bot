@@ -18,6 +18,18 @@ def test_categorize_matches_weather():
     assert scoring.categorize("Will it rain in Nairobi tomorrow?", []) == "Weather"
 
 
+def test_categorize_matches_esports_not_sports():
+    assert scoring.categorize("Will Team Liquid win the League of Legends final?", []) == "Esports"
+
+
+def test_categorize_matches_geopolitics():
+    assert scoring.categorize("Will there be a ceasefire in the conflict this month?", []) == "Geopolitics"
+
+
+def test_categorize_matches_finance_not_economics():
+    assert scoring.categorize("Will the S&P 500 close above 6000 by Friday?", []) == "Finance"
+
+
 def test_categorize_uses_tags_too():
     assert scoring.categorize("Some ambiguous question", ["crypto", "defi"]) == "Crypto"
 

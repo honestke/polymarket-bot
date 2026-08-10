@@ -18,11 +18,15 @@ from datetime import datetime, timezone
 CATEGORY_KEYWORDS = {
     "AI": ["ai", "artificial intelligence", "openai", "anthropic", "llm", "gpt"],
     "Politics": ["election", "president", "senate", "congress", "governor", "vote"],
+    "Geopolitics": ["war", "invasion", "ceasefire", "military", "nato", "sanctions", "treaty", "iran", "conflict"],
     "Crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "token"],
     "Sports": ["nfl", "nba", "nhl", "mlb", "premier league", "champions league", "world cup", "ufc"],
+    "Esports": ["esports", "league of legends", "lol", "csgo", "cs2", "valorant", "dota", "overwatch"],
     "Economics": ["fed", "rate cut", "inflation", "gdp", "recession", "jobs report"],
+    "Finance": ["stock", "s&p", "nasdaq", "dow jones", "ipo", "earnings", "treasury yield"],
     "Technology": ["apple", "google", "microsoft", "nvidia", "tesla", "iphone"],
     "Entertainment": ["oscar", "grammy", "box office", "movie", "album"],
+    "Art": ["art", "auction", "painting", "sculpture", "sotheby", "christie"],
     "Science": ["nasa", "spacex", "climate", "vaccine", "fda"],
     "Weather": ["weather", "temperature", "rain", "snow", "hurricane", "storm", "celsius", "fahrenheit", "forecast", "heatwave"],
 }
