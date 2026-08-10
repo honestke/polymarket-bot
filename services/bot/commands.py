@@ -114,7 +114,7 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
 
     elif action == "category":
         telegram_client.answer_callback_query(callback_query_id)
-        _send_market_list(chat_id, db.get_markets_by_category(value, limit=5), "📂")
+        _send_market_list(chat_id, db.get_markets_by_category(value, limit=10), "📂")
 
     elif action == "ending":
         telegram_client.answer_callback_query(callback_query_id)
@@ -122,7 +122,7 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
         if not bucket:
             return
         min_days, max_days = bucket
-        _send_market_list(chat_id, db.get_ending_in_range(min_days, max_days, limit=5), "⏳")
+        _send_market_list(chat_id, db.get_ending_in_range(min_days, max_days, limit=10), "⏳")
 
     elif action == "endingmonthmenu":
         telegram_client.answer_callback_query(callback_query_id)
@@ -137,16 +137,27 @@ def handle_callback(chat_id: int, callback_query_id: str, data: str) -> None:
             return
         label = f"{calendar.month_name[month]} {year}"
         _send_market_list(
-            chat_id, db.get_ending_in_calendar_month(year, month, limit=5), "📅",
+            chat_id, db.get_ending_in_calendar_month(year, month, limit=10), "📅",
             empty_msg=f"Nothing resolving in {label} yet.",
         )
 
     elif action == "best":
         telegram_client.answer_callback_query(callback_query_id)
+        if value == "volume":
+            _count_menu(chat_id, "volume", "💰 By Volume")
+            return
         since_days = config.BEST_OPPORTUNITIES_WINDOWS.get(value)
         if since_days is None:
             return
-        _send_market_list(chat_id, db.get_top_opportunities_since(since_days, limit=5), "🏆")
+        _send_market_list(chat_id, db.get_top_opportunities_since(since_days, limit=10), "🏆")
+
+    elif action == "volume":
+        telegram_client.answer_callback_query(callback_query_id)
+        try:
+            limit = int(value)
+        except ValueError:
+            limit = 10
+        _send_market_list(chat_id, db.get_top_by_volume(limit=limit), "💰")
 
     elif action == "threshold":
         try:
@@ -187,9 +198,21 @@ def _best_menu(chat_id: int) -> None:
             [{"text": "🔥 Today", "callback_data": "best:today"}],
             [{"text": "📅 This Week", "callback_data": "best:week"}],
             [{"text": "🗓️ This Month", "callback_data": "best:month"}],
+            [{"text": "💰 By Volume", "callback_data": "best:volume"}],
         ]
     }
     telegram_client.send_message(chat_id, "🏆 *Best Opportunities* — pick a window:", reply_markup=keyboard)
+
+
+def _count_menu(chat_id: int, prefix: str, title: str) -> None:
+    keyboard = {
+        "inline_keyboard": [
+            [{"text": "Top 5", "callback_data": f"{prefix}:5"}],
+            [{"text": "Top 10", "callback_data": f"{prefix}:10"}],
+            [{"text": "Top 20", "callback_data": f"{prefix}:20"}],
+        ]
+    }
+    telegram_client.send_message(chat_id, f"{title} — how many?", reply_markup=keyboard)
 
 
 def _trending(chat_id: int) -> None:
@@ -200,7 +223,7 @@ def _trending(chat_id: int) -> None:
 
 
 def _new(chat_id: int) -> None:
-    _send_market_list(chat_id, db.get_recent_markets(limit=5), "🆕")
+    _send_market_list(chat_id, db.get_recent_markets(limit=10), "🆕")
 
 
 def _help(chat_id: int) -> None:

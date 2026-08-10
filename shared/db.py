@@ -78,6 +78,19 @@ def get_priority_boosts() -> list[dict]:
     return get_client().table("priority_boosts").select("*").execute().data
 
 
+def get_top_by_volume(limit: int = 10) -> list[dict]:
+    result = (
+        get_client()
+        .table("markets")
+        .select("*")
+        .eq("status", "active")
+        .order("last_volume_24h", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data
+
+
 def get_top_opportunities(limit: int = 10) -> list[dict]:
     result = (
         get_client()
