@@ -26,6 +26,11 @@ HELP_TEXT = (
     "— everything else still gets logged, just check 📡 Live Updates for it."
 )
 
+WELCOME_TEXT = (
+    "👋 *Welcome to your Polymarket Intelligence Bot*\n\n"
+    "Use the buttons below to browse. Send /help anytime for the full command list."
+)
+
 # Persistent-menu button labels map to the same handlers as their slash
 # command equivalents.
 _MENU_LABELS = {
@@ -51,7 +56,7 @@ def handle(chat_id: int, text: str) -> None:
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     if command == "/start":
-        telegram_client.send_message(chat_id, HELP_TEXT, reply_markup=formatting.MAIN_MENU_KEYBOARD)
+        telegram_client.send_message(chat_id, WELCOME_TEXT, reply_markup=formatting.MAIN_MENU_KEYBOARD)
     elif command == "/help":
         telegram_client.send_message(chat_id, HELP_TEXT)
     elif command == "/top":
