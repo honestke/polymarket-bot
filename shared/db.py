@@ -94,13 +94,22 @@ def get_top_by_volume(limit: int = 10) -> list[dict]:
 def search_markets(term: str, limit: int = 5) -> list[dict]:
     """Case-insensitive substring match on the question text. Used by
     /add so boosting a keyword also shows what it currently matches,
-    instead of a bare confirmation with no visible effect."""
+    instead of a bare confirmation with no visible effect.
+
+    Uses .filter() with PostgREST's native '*' wildcard syntax instead of
+    .ilike()'s '%' convenience syntax. '%' has special meaning in URLs
+    (starts a percent-encoding escape sequence) — a literal, unencoded
+    '%' reaching the request appears to be what was crashing Supabase's
+    edge layer. Confirmed via elimination: failed identically and
+    consistently across completely different search terms ("Elon",
+    "bitcoin"), which rules out a data-content or index/performance
+    cause and points at the wildcard character itself."""
     result = (
         get_client()
         .table("markets")
         .select("*")
         .eq("status", "active")
-        .ilike("question", f"%{term}%")
+        .filter("question", "ilike", f"*{term}*")
         .order("opportunity_score", desc=True)
         .limit(limit)
         .execute()
