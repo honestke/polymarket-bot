@@ -24,6 +24,7 @@ CATEGORY_KEYWORDS = {
     "Technology": ["apple", "google", "microsoft", "nvidia", "tesla", "iphone"],
     "Entertainment": ["oscar", "grammy", "box office", "movie", "album"],
     "Science": ["nasa", "spacex", "climate", "vaccine", "fda"],
+    "Weather": ["weather", "temperature", "rain", "snow", "hurricane", "storm", "celsius", "fahrenheit", "forecast", "heatwave"],
 }
 
 

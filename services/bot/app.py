@@ -18,6 +18,7 @@ BOT_COMMANDS = [
     {"command": "live", "description": "Recent activity below your push threshold"},
     {"command": "categories", "description": "Browse by category"},
     {"command": "saved", "description": "Markets you've saved"},
+    {"command": "search", "description": "Search current markets: /search <term>"},
     {"command": "watchlist", "description": "Show your priority boosts"},
     {"command": "add", "description": "Boost matching markets: /add <keyword>"},
     {"command": "remove", "description": "Remove a boost: /remove <keyword>"},
@@ -59,6 +60,14 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
     message = update.get("message", {})
     chat_id = message.get("chat", {}).get("id")
     text = (message.get("text") or "").strip()
+
+    # A reply to our own force_reply search prompt is search input, not a
+    # command — Telegram's force_reply is the cleanest native way to get
+    # free-text input without any custom session/state tracking.
+    reply_to = message.get("reply_to_message", {})
+    if chat_id and text and reply_to.get("text") == commands.SEARCH_PROMPT:
+        commands.handle_search_reply(chat_id, text)
+        return {"ok": True}
 
     if chat_id and text:
         commands.handle(chat_id, text)

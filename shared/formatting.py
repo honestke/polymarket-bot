@@ -132,8 +132,8 @@ MAIN_MENU_KEYBOARD = {
         ["🔥 Trending", "🆕 New Markets"],
         ["⏳ Ending Soon", "📡 Live Updates"],
         ["📂 Categories", "⭐ Saved"],
-        ["📊 Stats", "⚙️ Settings"],
-        ["❓ Help"],
+        ["🔍 Search", "📊 Stats"],
+        ["⚙️ Settings", "❓ Help"],
     ],
     "resize_keyboard": True,
 }

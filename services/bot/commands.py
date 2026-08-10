@@ -31,6 +31,8 @@ WELCOME_TEXT = (
     "Use the buttons below to browse. Send /help anytime for the full command list."
 )
 
+SEARCH_PROMPT = "🔍 Type a keyword or phrase to search current markets:"
+
 # Persistent-menu button labels map to the same handlers as their slash
 # command equivalents.
 _MENU_LABELS = {
@@ -43,6 +45,7 @@ _MENU_LABELS = {
     "📂 Categories": "_categories",
     "⭐ Saved": "_saved",
     "📊 Stats": "_stats",
+    "🔍 Search": "_search_menu",
     "⚙️ Settings": "_settings",
     "❓ Help": "_help",
 }
@@ -81,6 +84,8 @@ def handle(chat_id: int, text: str) -> None:
         _add(chat_id, arg)
     elif command == "/remove":
         _remove(chat_id, arg)
+    elif command == "/search":
+        _search(chat_id, arg)
     elif command == "/threshold":
         _set_threshold(chat_id, arg)
     elif command == "/stats":
@@ -203,6 +208,25 @@ def _best_menu(chat_id: int) -> None:
 
 def _volume_menu(chat_id: int) -> None:
     _count_menu(chat_id, "volume", "💰 By Volume")
+
+
+def _search_menu(chat_id: int) -> None:
+    telegram_client.send_message(chat_id, SEARCH_PROMPT, reply_markup={"force_reply": True})
+
+
+def _search(chat_id: int, term: str) -> None:
+    if not term:
+        telegram_client.send_message(chat_id, "Usage: /search <keyword or phrase>")
+        return
+    matches = db.search_markets(term, limit=10)
+    _send_market_list(chat_id, matches, "🔍", empty_msg=f'No current markets match "{term}".')
+
+
+def handle_search_reply(chat_id: int, term: str) -> None:
+    """Called from the webhook when the incoming message is a reply to
+    our own force_reply search prompt — see services/bot/app.py. This is
+    a pure search, no boost side effect, unlike /add."""
+    _search(chat_id, term)
 
 
 def _count_menu(chat_id: int, prefix: str, title: str) -> None:

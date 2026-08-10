@@ -11,7 +11,11 @@ def test_categorize_matches_keyword():
 
 
 def test_categorize_falls_back_to_other():
-    assert scoring.categorize("Will it rain in Nairobi tomorrow?", []) == "Other"
+    assert scoring.categorize("Will the new bridge open on schedule?", []) == "Other"
+
+
+def test_categorize_matches_weather():
+    assert scoring.categorize("Will it rain in Nairobi tomorrow?", []) == "Weather"
 
 
 def test_categorize_uses_tags_too():
