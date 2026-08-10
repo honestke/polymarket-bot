@@ -43,6 +43,7 @@ _MENU_LABELS = {
     "⭐ Saved": "_saved",
     "📊 Stats": "_stats",
     "⚙️ Settings": "_settings",
+    "❓ Help": "_help",
 }
 
 
@@ -58,7 +59,7 @@ def handle(chat_id: int, text: str) -> None:
     if command == "/start":
         telegram_client.send_message(chat_id, WELCOME_TEXT, reply_markup=formatting.MAIN_MENU_KEYBOARD)
     elif command == "/help":
-        telegram_client.send_message(chat_id, HELP_TEXT)
+        _help(chat_id)
     elif command == "/top":
         _best_menu(chat_id)
     elif command == "/trending":
@@ -190,6 +191,10 @@ def _trending(chat_id: int) -> None:
 
 def _new(chat_id: int) -> None:
     _send_market_list(chat_id, db.get_recent_markets(limit=5), "🆕")
+
+
+def _help(chat_id: int) -> None:
+    telegram_client.send_message(chat_id, HELP_TEXT, reply_markup=formatting.MAIN_MENU_KEYBOARD)
 
 
 def _saved(chat_id: int) -> None:
