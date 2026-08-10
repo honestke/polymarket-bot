@@ -47,5 +47,13 @@ def set_my_commands(commands: list[dict]) -> None:
     """Registers the bot's command list with Telegram so it shows up in
     the native menu (the icon next to the message box, or typing '/'
     autocompletes with descriptions) — without this, a new user has to
-    already know to type /start with no prompt at all."""
-    httpx.post(f"{_api_base()}/setMyCommands", json={"commands": commands}, timeout=10)
+    already know to type /start with no prompt at all.
+
+    Called from a FastAPI startup event (services/bot/app.py) — a network
+    hiccup here must never be allowed to crash app startup and take the
+    whole webhook down with it, so this swallows and logs rather than
+    raising."""
+    try:
+        httpx.post(f"{_api_base()}/setMyCommands", json={"commands": commands}, timeout=10)
+    except httpx.HTTPError as exc:
+        print(f"set_my_commands failed (non-fatal, app will still start): {exc}")

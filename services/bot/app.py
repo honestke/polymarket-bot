@@ -31,8 +31,15 @@ BOT_COMMANDS = [
 async def register_commands() -> None:
     """Runs automatically every time this service boots (including every
     deploy) — registers the command list with Telegram so it shows up in
-    the native menu with no manual curl step required, ever."""
-    telegram_client.set_my_commands(BOT_COMMANDS)
+    the native menu with no manual curl step required, ever.
+
+    Wrapped defensively: this is a nice-to-have, and must never be able
+    to prevent the webhook itself from coming up if Telegram is slow or
+    unreachable during a cold start."""
+    try:
+        telegram_client.set_my_commands(BOT_COMMANDS)
+    except Exception as exc:  # noqa: BLE001 — deliberately broad, see docstring
+        print(f"register_commands startup hook failed (non-fatal): {exc}")
 
 
 @app.post("/webhook")
