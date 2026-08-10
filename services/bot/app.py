@@ -54,7 +54,7 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
         cq = update["callback_query"]
         chat_id = cq.get("message", {}).get("chat", {}).get("id")
         if chat_id:
-            commands.handle_callback(chat_id, cq["id"], cq.get("data", ""))
+            _safe_dispatch(chat_id, lambda: commands.handle_callback(chat_id, cq["id"], cq.get("data", "")))
         return {"ok": True}
 
     message = update.get("message", {})
@@ -67,13 +67,45 @@ async def webhook(request: Request, x_telegram_bot_api_secret_token: str = Heade
         # per chat_id — reliable across every Telegram client, unlike
         # depending on reply_to_message threading (the earlier approach,
         # which wasn't consistently triggering).
-        pending = commands.get_and_clear_pending_action(chat_id)
+        #
+        # Wrapped defensively: Supabase has occasionally returned a
+        # transient Cloudflare-layer error (HTML instead of JSON) rather
+        # than a normal response — confirmed as an external
+        # infrastructure issue, not a bug in this query. A single hiccup
+        # here must not take down the whole command (fail safe: treat it
+        # as "no pending action" and let normal command handling proceed,
+        # rather than erroring out with no reply at all).
+        try:
+            pending = commands.get_and_clear_pending_action(chat_id)
+        except Exception as exc:  # noqa: BLE001 — deliberately broad, see docstring
+            print(f"get_and_clear_pending_action failed (non-fatal, treating as no pending action): {exc}")
+            pending = None
+
         if pending == "search":
-            commands.handle_search_reply(chat_id, text)
-            return {"ok": True}
-        commands.handle(chat_id, text)
+            _safe_dispatch(chat_id, lambda: commands.handle_search_reply(chat_id, text))
+        else:
+            _safe_dispatch(chat_id, lambda: commands.handle(chat_id, text))
 
     return {"ok": True}
+
+
+def _safe_dispatch(chat_id, fn) -> None:
+    """Runs a command handler and, if it raises (e.g. a transient
+    Supabase/Cloudflare hiccup — confirmed as a real external issue, not
+    a bug in the query logic), tells the user to retry instead of
+    leaving them with total silence. This is what "Settings"/"Saved"/
+    "Categories" taps looked like before this existed: sent, then
+    nothing back at all, with no indication anything went wrong."""
+    try:
+        fn()
+    except Exception as exc:  # noqa: BLE001 — deliberately broad, see docstring
+        print(f"Command handler failed: {exc}")
+        try:
+            telegram_client.send_message(
+                chat_id, "⚠️ Something went wrong on that request — please try again in a moment."
+            )
+        except Exception:  # noqa: BLE001 — never let the error-reporting path itself crash the webhook
+            pass
 
 
 @app.get("/")
