@@ -12,6 +12,12 @@ DEFAULT_LIMIT = 5
 
 
 def run(limit: int = DEFAULT_LIMIT) -> None:
+    # Runs here rather than in the scan job — doesn't need per-5-minute
+    # freshness, and was adding real time to the scan's critical path as
+    # the market count grew (see shared/db.py's recompute_group_sizes
+    # docstring for the full reasoning).
+    db.recompute_group_sizes()
+
     top = db.get_top_opportunities(limit=limit)
     if not top:
         print("No markets tracked yet — has the scan job run?")

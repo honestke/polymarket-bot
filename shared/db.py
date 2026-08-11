@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from supabase import Client, create_client
@@ -14,7 +15,7 @@ def get_client() -> Client:
     return _client
 
 
-def _chunks(items: list, size: int = 200):
+def _chunks(items: list, size: int = 500):
     for i in range(0, len(items), size):
         yield items[i : i + size]
 
@@ -40,7 +41,7 @@ def get_markets_by_ids(market_ids: list[str]) -> dict[str, dict]:
     if not market_ids:
         return {}
     result: dict[str, dict] = {}
-    chunk_size = 200
+    chunk_size = 500
     for i in range(0, len(market_ids), chunk_size):
         chunk = market_ids[i : i + chunk_size]
         response = get_client().table("markets").select("*").in_("market_id", chunk).execute()
@@ -189,6 +190,33 @@ def update_group_sizes(size: int, market_ids: list[str]) -> None:
         return
     for chunk in _chunks(market_ids):
         get_client().table("markets").update({"group_size": size}).in_("market_id", chunk).execute()
+
+
+def recompute_group_sizes() -> None:
+    """Computes group_size (the 'one of N candidates' label) from OUR OWN
+    data — how many currently-active markets share the same event slug —
+    rather than Gamma's nested event.markets array, which the /markets
+    endpoint doesn't reliably include (confirmed only for the /events
+    endpoint). The event slug itself is known-good, since it's the same
+    field the 'Open Market' link is built from and that's been confirmed
+    working.
+
+    Moved out of the scan job on purpose: this does a full-table read
+    plus several chunked updates, and doesn't need per-5-minute
+    freshness. Running it every scan cycle was adding real time to the
+    scan's critical path as the market count grew (a scan came close to
+    the 8-minute workflow timeout). Called from the hourly digest job
+    instead — see services/digest/digest.py."""
+    rows = get_active_market_slugs()
+    slug_counts = Counter(r["slug"] for r in rows if r.get("slug"))
+    by_size: dict[int, list[str]] = {}
+    for r in rows:
+        slug = r.get("slug")
+        if not slug:
+            continue
+        by_size.setdefault(slug_counts[slug], []).append(r["market_id"])
+    for size, market_ids in by_size.items():
+        update_group_sizes(size, market_ids)
 
 
 def get_latest_ai_summary(market_id: str) -> dict | None:
