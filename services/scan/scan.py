@@ -49,6 +49,16 @@ def run() -> None:
 
     market_rows: list[dict] = []
     snapshot_rows: list[dict] = []
+    # New-market alerts can't be inserted into `alerts` until the market
+    # itself exists in `markets` (foreign key constraint) — but
+    # market_rows is only bulk-upserted once, at the end of this loop.
+    # Collect them here and process after that upsert completes, instead
+    # of inserting inline during the loop (which was a real bug: it
+    # tried to log an alert for a market row before that row existed in
+    # the database, failing with "violates foreign key constraint
+    # alerts_market_id_fkey" whenever a genuinely new, notable market
+    # showed up).
+    pending_new_market_alerts: list[dict] = []
 
     for m in raw_markets:
         market_id = m["market_id"]
@@ -139,17 +149,13 @@ def run() -> None:
             should_snapshot = True
             if opportunity >= config.NEW_MARKET_ALERT_THRESHOLD:
                 channel = "push" if opportunity >= push_threshold else "feed"
-                db.insert_alert({
+                pending_new_market_alerts.append({
                     "market_id": market_id,
                     "chat_id": chat_id,
-                    "alert_type": "new_market",
-                    "triggered_value": opportunity,
                     "channel": channel,
+                    "opportunity": opportunity,
+                    "row": row,
                 })
-                if channel == "push":
-                    text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
-                    keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"), row.get("category"))
-                    telegram_client.send_message(chat_id, text, reply_markup=keyboard)
             # Markets below NEW_MARKET_ALERT_THRESHOLD aren't logged at all
             # — not interesting enough even for the feed. They're still
             # tracked and scored, just surfaced only via /top or /new.
@@ -178,12 +184,31 @@ def run() -> None:
             summarize_market(market_id, m["question"], prev_price, m["price_yes"], tier)
 
     db.upsert_markets(market_rows)
+    # Only now do the new-market rows actually exist in `markets` — safe
+    # to insert their alerts and push notifications.
+    process_new_market_alerts(pending_new_market_alerts)
     resolved_count = db.mark_expired_as_resolved()
     if resolved_count:
         print(f"Marked {resolved_count} markets resolved (end_date has passed).")
     db.insert_price_snapshots(snapshot_rows)
     recompute_group_sizes()
     print(f"Scan complete: {len(market_rows)} markets processed, {len(snapshot_rows)} snapshots written.")
+
+
+def process_new_market_alerts(pending: list[dict]) -> None:
+    for item in pending:
+        db.insert_alert({
+            "market_id": item["market_id"],
+            "chat_id": item["chat_id"],
+            "alert_type": "new_market",
+            "triggered_value": item["opportunity"],
+            "channel": item["channel"],
+        })
+        if item["channel"] == "push":
+            row = item["row"]
+            text = formatting.format_market_card(row, icon="🆕", highlight="Just discovered")
+            keyboard = formatting.market_keyboard(row["short_id"], row.get("slug"), row.get("category"))
+            telegram_client.send_message(item["chat_id"], text, reply_markup=keyboard)
 
 
 def recompute_group_sizes() -> None:
