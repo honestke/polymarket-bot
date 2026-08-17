@@ -50,42 +50,60 @@ def fetch_all_active_markets() -> list[dict]:
 
 
 def _fetch_sorted(ascending: bool) -> list[dict]:
-    """One paginated pass in a given sort direction. Polymarket's API
-    returns a 422 error past a certain offset depth instead of an empty
-    page (confirmed in production). That's not documented behavior
-    anywhere public, so rather than assume a fixed cutoff, this treats
-    any error response as "no more pages for this pass" and returns
-    whatever was successfully fetched instead of crashing the whole scan
-    over it. `MAX_PAGES` is a hard backstop in case the API ever starts
-    returning 200s forever."""
+    """One paginated pass in a given sort direction, using Polymarket's
+    cursor-based keyset pagination.
+
+    CONFIRMED via Polymarket's own changelog (docs.polymarket.com/changelog)
+    and live testing: the legacy offset-based GET /markets endpoint has
+    been fully sunset — it now returns 422 for literally any request,
+    not just ones with a high offset. This is a real, external API
+    migration, not the same class of bug as the earlier "offset > ~2100"
+    issue (which was this migration already partially in effect). Two
+    things changed together: the endpoint (/markets -> /markets/keyset,
+    using after_cursor/next_cursor instead of offset) AND the response
+    shape (a bare array before, now wrapped as
+    {"markets": [...], "next_cursor": "..."}).
+
+    Cursor pagination has no known fixed depth cap the way offset-based
+    pagination did, so the two-pass (ascending + descending) coverage
+    workaround in fetch_all_active_markets() may no longer be necessary
+    — kept for now as a safety net rather than assumed away, since that's
+    a separate, lower-risk simplification to make once this fix is
+    confirmed working in production.
+    """
     markets: list[dict] = []
-    offset = 0
+    cursor: str | None = None
     direction = "ascending" if ascending else "descending"
     with httpx.Client(timeout=30) as client:
         for _ in range(MAX_PAGES):
-            resp = client.get(
-                f"{config.GAMMA_API_BASE}/markets",
-                params={
-                    "limit": PAGE_SIZE,
-                    "offset": offset,
-                    "active": True,
-                    "order": "volume24hr",
-                    "ascending": ascending,
-                },
-            )
+            params = {
+                "limit": PAGE_SIZE,
+                "closed": "false",  # current docs-confirmed filter for active markets on keyset endpoints
+                "order": "volume24hr",
+                "ascending": ascending,
+            }
+            if cursor:
+                params["after_cursor"] = cursor
+
+            resp = client.get(f"{config.GAMMA_API_BASE}/markets/keyset", params=params)
             if resp.status_code >= 400:
                 print(
-                    f"Gamma API returned {resp.status_code} at offset={offset} ({direction} pass); "
-                    f"stopping this pass with {len(markets)} markets collected."
+                    f"Gamma API returned {resp.status_code} ({direction} pass, "
+                    f"cursor={'set' if cursor else 'none'}); stopping this pass "
+                    f"with {len(markets)} markets collected."
                 )
                 break
-            page = resp.json()
+
+            data = resp.json()
+            page = data.get("markets") if isinstance(data, dict) else data
             if not page:
                 break
             markets.extend(normalize(m) for m in page)
-            if len(page) < PAGE_SIZE:
+
+            next_cursor = data.get("next_cursor") if isinstance(data, dict) else None
+            if not next_cursor:
                 break
-            offset += PAGE_SIZE
+            cursor = next_cursor
     return markets
 
 

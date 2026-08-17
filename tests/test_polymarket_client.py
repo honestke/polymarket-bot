@@ -81,3 +81,36 @@ def test_normalize_group_size_none_when_not_determinable():
     }
     result = normalize(raw)
     assert result["group_size"] is None
+
+
+def test_normalize_handles_real_live_gamma_response_shape():
+    """Fields drawn directly from a real /markets/keyset response (fetched
+    live, Aug 2026) — locks in the current actual API shape rather than
+    an assumed one, since two earlier bugs (stringified JSON, event vs.
+    market slug) both came from the shape not matching what was assumed."""
+    raw = {
+        "id": "540817",
+        "question": "New Rihanna Album before GTA VI?",
+        "conditionId": "0x1fad72fae204143ff1c3035e99e7c0f65ea8d5cd9bd1070987bd1a3316f772be",
+        "slug": "new-rhianna-album-before-gta-vi-926",
+        "outcomes": '["Yes", "No"]',
+        "outcomePrices": '["0.565", "0.435"]',
+        "volume24hr": 1574.6869290000004,
+        "liquidity": "14591.1469",
+        "active": True,
+        "closed": False,
+        "createdAt": "2025-05-02T15:04:43.762151Z",
+        "endDate": "2026-07-31T12:00:00Z",
+        "events": [{
+            "id": "23784",
+            "slug": "what-will-happen-before-gta-vi",
+            "title": "What will happen before GTA VI?",
+            # no nested "markets" array in the real response
+        }],
+    }
+    result = normalize(raw)
+    assert result["market_id"] == "0x1fad72fae204143ff1c3035e99e7c0f65ea8d5cd9bd1070987bd1a3316f772be"
+    assert result["price_yes"] == 0.565
+    assert result["slug"] == "what-will-happen-before-gta-vi"  # event slug, not market slug
+    assert result["volume_24h"] == 1574.6869290000004
+    assert result["group_size"] is None

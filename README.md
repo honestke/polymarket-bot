@@ -97,15 +97,15 @@ immediately shows what currently matches, not just a bare confirmation.
 
 ## Known limitations (read before assuming something's broken)
 
-- **Coverage isn't literally 100% of the platform.** Gamma's `/markets`
-  endpoint returns a 422 error past roughly offset 2,100, regardless of
-  sort order. The scan does two passes (highest-volume-first and
-  lowest-volume-first) to cover both ends of the spectrum — roughly
-  doubling real coverage — but a platform with more than ~4,200
-  simultaneously active markets would still have some truly
-  middle-of-the-pack ones invisible to both passes. Not solved by more
-  passes; would need real cursor-based pagination if Gamma ever exposes
-  one.
+- **Coverage was capped, now fixed — but keep an eye on it.** Polymarket
+  fully sunset the legacy offset-based `GET /markets` endpoint (confirmed
+  via their own changelog and a live test — it now 422s for any request,
+  not just high-offset ones). Fixed by migrating to their new
+  `GET /markets/keyset` cursor-based endpoint, which has no known fixed
+  depth cap, so the earlier "two-pass" workaround for the offset wall may
+  no longer be necessary — it's left in place for now as a safety net
+  rather than removed on assumption. Worth revisiting once the new
+  pagination has run in production for a while.
 - **Resolved-market detection uses `end_date`, not "missing from a scan
   result."** A market can legitimately be a real, still-active,
   lower-volume market that simply falls outside a *given* scan's
